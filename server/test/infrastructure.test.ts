@@ -143,6 +143,25 @@ describe('database', () => {
     expect(plan).not.toMatch(/\bSort\b/);
   });
 
+  it('serves a country filter from the (country, saved_at, id) index with no sort step', async () => {
+    const plan = await queryPlan(
+      'SELECT id FROM profiles WHERE country = $1 ORDER BY saved_at DESC, id DESC LIMIT 21',
+      ['Spain'],
+    );
+
+    expect(plan).toContain('profiles_country_saved_at_id_idx');
+    expect(plan).not.toMatch(/\bSort\b/);
+  });
+
+  it('serves a name search ("contains") from the trigram index', async () => {
+    const plan = await queryPlan(
+      `SELECT id FROM profiles WHERE search_name LIKE '%' || profile_search_text($1) || '%'`,
+      ['garcia'],
+    );
+
+    expect(plan).toContain('profiles_search_name_trgm_idx');
+  });
+
   it('looks up a batch of ids through the primary key', async () => {
     const plan = await queryPlan('SELECT id FROM profiles WHERE id = ANY($1::text[])', [['a', 'b']]);
 

@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { errorCodeOf } from '../logger.js';
 
 // Return DATE columns as 'YYYY-MM-DD' strings. The default parser builds a Date at local
 // midnight, which shifts a birthday by a day in any timezone west of UTC.
@@ -31,7 +32,7 @@ interface RetryOptions {
 }
 
 /** `docker compose up` returns before Postgres accepts connections, so startup retries briefly (~10 s). */
-export const DATABASE_STARTUP_RETRY: Readonly<RetryOptions> = { attempts: 10, delayMs: 1_000 };
+const DATABASE_STARTUP_RETRY: Readonly<RetryOptions> = { attempts: 10, delayMs: 1_000 };
 
 interface PoolOptions {
   connectionString: string;
@@ -56,7 +57,10 @@ export async function checkDatabaseHealth(pool: pg.Pool): Promise<void> {
   await pool.query(HEALTH_CHECK_QUERY);
 }
 
-export async function waitForDatabase(pool: pg.Pool, { attempts, delayMs }: RetryOptions): Promise<void> {
+export async function waitForDatabase(
+  pool: pg.Pool,
+  { attempts, delayMs }: RetryOptions = DATABASE_STARTUP_RETRY,
+): Promise<void> {
   for (let attempt = 1; ; attempt++) {
     try {
       await checkDatabaseHealth(pool);
@@ -76,7 +80,7 @@ export function isDatabaseUnavailableError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
   }
-  const code = 'code' in error && typeof error.code === 'string' ? error.code : undefined;
+  const code = errorCodeOf(error);
   if (code !== undefined && UNAVAILABLE_ERROR_CODES.has(code)) {
     return true;
   }

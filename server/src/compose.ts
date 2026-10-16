@@ -7,15 +7,19 @@ import type { Logger } from './logger.js';
 import { PostgresProfileRepository } from './repositories/postgresProfileRepository.js';
 import { ProfileService } from './services/profileService.js';
 
-/** Wires config → pool → repository → service → app. Shared by the long-running server and the serverless entry. */
-export function composeApp(config: AppConfig, logger: Logger): { app: Express; pool: pg.Pool } {
-  const pool = createPool({
+export function createAppPool(config: AppConfig, logger: Logger, maxConnections = config.DB_POOL_SIZE): pg.Pool {
+  return createPool({
     connectionString: config.DATABASE_URL,
-    maxConnections: config.DB_POOL_SIZE,
+    maxConnections,
     onIdleClientError: (error) => {
       logger.error('Idle PostgreSQL client error', error);
     },
   });
+}
+
+/** Wires config → pool → repository → service → app, for both the long-running server and the serverless entry. */
+export function composeApp(config: AppConfig, logger: Logger): { app: Express; pool: pg.Pool } {
+  const pool = createAppPool(config, logger);
 
   const app = createApp({
     profileService: new ProfileService(new PostgresProfileRepository(pool)),

@@ -1,8 +1,14 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { DEFAULT_PAGE_SIZE, MAX_IDS_PER_LOOKUP, MAX_PAGE_SIZE } from '../../constants/api.js';
+import {
+  DEFAULT_PAGE_SIZE,
+  MAX_IDS_PER_LOOKUP,
+  MAX_NAME_FILTER_LENGTH,
+  MAX_NAME_FILTER_WORDS,
+  MAX_PAGE_SIZE,
+} from '../../constants/api.js';
 import { HttpStatus } from '../../constants/httpStatus.js';
-import { profileDetailsSchema, profileIdSchema, profileSchema } from '../../domain/profile/index.js';
+import { isCountry, profileDetailsSchema, profileIdSchema, profileSchema } from '../../domain/profile/index.js';
 import type { ProfileService } from '../../services/profileService.js';
 import { cursorParamSchema, encodeCursor } from '../pageCursor.js';
 import { parseRequest, RequestPart } from '../requestValidation.js';
@@ -14,7 +20,19 @@ const idListSchema = z
   .transform((value) => [...new Set(value.split(','))])
   .pipe(z.array(profileIdSchema).min(1).max(MAX_IDS_PER_LOOKUP));
 
-/** Either a page of the list (?limit=&cursor=) or a lookup of specific profiles (?ids=a,b,c). */
+const WHITESPACE = /\s+/;
+
+/** "  smith  john " -> ["smith", "john"]: every word must match, in any order. */
+const nameFilterSchema = z
+  .string()
+  .max(MAX_NAME_FILTER_LENGTH)
+  .transform((value) => value.split(WHITESPACE).filter((word) => word.length > 0))
+  .pipe(z.array(z.string()).max(MAX_NAME_FILTER_WORDS, `name may have at most ${MAX_NAME_FILTER_WORDS} words`));
+
+/**
+ * Either a page of the list (?limit=&cursor=, optionally narrowed by ?name=&country=) or a lookup
+ * of specific profiles (?ids=a,b,c).
+ */
 const listQuerySchema = z
   .object({
     // Digits only: Number() would also accept "0x10" or "1e1".
@@ -25,24 +43,35 @@ const listQuerySchema = z
       .pipe(z.number().min(1).max(MAX_PAGE_SIZE))
       .optional(),
     cursor: cursorParamSchema.optional(),
+    name: nameFilterSchema.optional(),
+    country: z.string().refine(isCountry, 'country must be one of the listed countries').optional(),
     ids: idListSchema.optional(),
   })
   .strict()
-  .refine((query) => !query.ids || (query.limit === undefined && query.cursor === undefined), {
-    message: 'ids cannot be combined with limit or cursor',
-    path: ['ids'],
-  });
+  .refine(
+    (query) =>
+      !query.ids ||
+      (query.limit === undefined &&
+        query.cursor === undefined &&
+        query.name === undefined &&
+        query.country === undefined),
+    { message: 'ids cannot be combined with other parameters', path: ['ids'] },
+  );
 
 export function createProfilesRouter(service: ProfileService): Router {
   const router = Router();
 
   router.get('/', async (req, res) => {
-    const { limit, cursor, ids } = parseRequest(listQuerySchema, req.query, RequestPart.Query);
+    const { limit, cursor, name, country, ids } = parseRequest(listQuerySchema, req.query, RequestPart.Query);
     if (ids) {
       res.json({ profiles: await service.findByIds(ids), nextCursor: null });
       return;
     }
-    const page = await service.listPage({ limit: limit ?? DEFAULT_PAGE_SIZE, after: cursor });
+    const page = await service.listPage({
+      limit: limit ?? DEFAULT_PAGE_SIZE,
+      after: cursor,
+      filter: { nameWords: name ?? [], country },
+    });
     res.json({ profiles: page.items, nextCursor: page.nextCursor ? encodeCursor(page.nextCursor) : null });
   });
 

@@ -1,4 +1,4 @@
-export interface Migration {
+interface Migration {
   readonly version: number;
   readonly name: string;
   readonly sql: string;
@@ -53,6 +53,32 @@ export const migrations: readonly Migration[] = [
                        current_user, current_database(), '10s');
       END
       $$;
+    `,
+  },
+  {
+    version: 3,
+    name: 'profile_search',
+    // History filters on the server, so a filter covers every saved profile, not just loaded pages.
+    sql: `
+      CREATE EXTENSION IF NOT EXISTS unaccent;
+      CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+      -- Case- and accent-insensitive search text ("José" -> "jose"). unaccent() is only STABLE
+      -- because its dictionary could change; pinning the dictionary makes this wrapper safe to
+      -- declare IMMUTABLE, which a generated column and its index require.
+      CREATE FUNCTION profile_search_text(value text) RETURNS text
+        LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT
+        RETURN lower(public.unaccent('public.unaccent'::regdictionary, value));
+
+      -- Kept in step by Postgres itself: no write path can forget to update it.
+      ALTER TABLE profiles
+        ADD COLUMN search_name text NOT NULL
+        GENERATED ALWAYS AS (profile_search_text(title || ' ' || first_name || ' ' || last_name)) STORED;
+
+      -- Trigrams serve "contains" (LIKE '%word%'), which a B-tree cannot.
+      CREATE INDEX profiles_search_name_trgm_idx ON profiles USING gin (search_name gin_trgm_ops);
+      -- A country filter walks this in list order, so it pages like the unfiltered list.
+      CREATE INDEX profiles_country_saved_at_id_idx ON profiles (country, saved_at DESC, id DESC);
     `,
   },
 ];

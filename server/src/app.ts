@@ -5,12 +5,13 @@ import { createErrorHandler } from './http/middleware/errorHandler.js';
 import { notFoundHandler } from './http/middleware/notFoundHandler.js';
 import { createRateLimiters, type RateLimits } from './http/middleware/rateLimit.js';
 import { securityHeaders } from './http/middleware/securityHeaders.js';
+import { createCountriesRouter } from './http/routes/countriesRouter.js';
 import { createHealthRouter } from './http/routes/healthRouter.js';
 import { createProfilesRouter } from './http/routes/profilesRouter.js';
 import type { Logger } from './logger.js';
 import type { ProfileService } from './services/profileService.js';
 
-export interface AppDependencies {
+interface AppDependencies {
   profileService: ProfileService;
   checkDatabaseHealth: () => Promise<void>;
   corsOrigins: readonly string[];
@@ -35,6 +36,7 @@ export function createApp(dependencies: AppDependencies): Express {
 
   app.use(ApiPath.Health, createHealthRouter(checkDatabaseHealth, logger));
   app.use(ApiPath.Profiles, createProfilesRouter(profileService));
+  app.use(ApiPath.Countries, createCountriesRouter(profileService));
   app.use(notFoundHandler);
   app.use(createErrorHandler(logger));
 

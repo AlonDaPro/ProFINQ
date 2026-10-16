@@ -2,6 +2,7 @@ export enum ApiPath {
   Root = '/api',
   Health = '/api/health',
   Profiles = '/api/profiles',
+  Countries = '/api/countries',
 }
 
 export enum HealthStatus {
@@ -24,3 +25,6 @@ export const MAX_PAGE_SIZE = 100;
 export const MAX_IDS_PER_LOOKUP = 100;
 /** A real cursor is about 100 characters; anything far longer is not one. */
 export const MAX_CURSOR_LENGTH = 512;
+/** The History name filter: long enough for any full name, short enough to keep the query cheap. */
+export const MAX_NAME_FILTER_LENGTH = 100;
+export const MAX_NAME_FILTER_WORDS = 8;

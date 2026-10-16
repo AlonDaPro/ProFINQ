@@ -10,7 +10,14 @@ export interface Page<T> {
   nextCursor: PageCursor | null;
 }
 
+/** Narrows the list. Every word must appear in the full name (any order, case and accents ignored). */
+export interface ListFilter {
+  nameWords: readonly string[];
+  country?: string;
+}
+
 export interface PageRequest {
   limit: number;
   after?: PageCursor;
+  filter: ListFilter;
 }

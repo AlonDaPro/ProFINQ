@@ -1,6 +1,6 @@
 import type { ErrorCode } from '../constants/errorCode.js';
 
-export interface ApiErrorDetail {
+interface ApiErrorDetail {
   path: string;
   message: string;
 }

@@ -10,6 +10,10 @@ export class ProfileService {
     return this.repository.listPage(request);
   }
 
+  listCountries(): Promise<string[]> {
+    return this.repository.listCountries();
+  }
+
   findByIds(ids: readonly string[]): Promise<SavedProfile[]> {
     return this.repository.findByIds(ids);
   }

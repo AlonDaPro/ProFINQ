@@ -1,8 +1,8 @@
 import 'dotenv/config';
 import { composeApp } from './compose.js';
 import { loadConfig } from './config/env.js';
-import { runMigrations } from './db/migrate.js';
-import { DATABASE_STARTUP_RETRY, waitForDatabase } from './db/pool.js';
+import { ExitCode } from './constants/exitCode.js';
+import { migrateWhenReady } from './db/migrate.js';
 import { consoleLogger as logger } from './logger.js';
 
 // The long-running server (local development, Docker, any VM). On Vercel, src/serverless.ts is the entry.
@@ -11,17 +11,11 @@ import { consoleLogger as logger } from './logger.js';
 const SHUTDOWN_GRACE_MS = 10_000;
 const SHUTDOWN_SIGNALS: readonly NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
 
-enum ExitCode {
-  Success = 0,
-  Failure = 1,
-}
-
 async function main(): Promise<void> {
   const config = loadConfig();
   const { app, pool } = composeApp(config, logger);
 
-  await waitForDatabase(pool, DATABASE_STARTUP_RETRY);
-  const appliedVersions = await runMigrations(pool);
+  const appliedVersions = await migrateWhenReady(pool);
   if (appliedVersions.length > 0) {
     logger.info('Applied database migrations', { versions: appliedVersions });
   }

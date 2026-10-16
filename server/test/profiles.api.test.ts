@@ -329,3 +329,86 @@ describe('DELETE /api/profiles/:id', () => {
     await request(app).delete(PROFILE_URL).expect(404);
   });
 });
+
+describe('GET /api/profiles (filters)', () => {
+  async function savePerson(id: string, first: string, last: string, country = 'United States') {
+    const profile = { ...buildProfile(), id, name: { title: Title.Mr, first, last } };
+    await request(app)
+      .post('/api/profiles')
+      .send(withValue(profile, 'location.country', country))
+      .expect(201);
+  }
+
+  const listIds = async (query: Record<string, string>): Promise<string[]> => {
+    const response = await request(app).get('/api/profiles').query(query).expect(200);
+    const { profiles } = response.body as { profiles: { id: string }[] };
+    return profiles.map((profile) => profile.id).sort();
+  };
+
+  beforeEach(async () => {
+    await savePerson('jose', 'José', 'García', 'Spain');
+    await savePerson('john', 'John', 'Smith');
+    await savePerson('begum', 'Begüm', 'Öz', 'Türkiye');
+  });
+
+  it.each([
+    ['any word order', 'smith john', ['john']],
+    ['no accents typed', 'jose garcia', ['jose']],
+    ['accents typed', 'GARCÍA', ['jose']],
+    ['the title', 'mr oz', ['begum']],
+    ['a partial word', 'mit', ['john']],
+  ])('matches names by %s', async (_label, name, expected) => {
+    await expect(listIds({ name })).resolves.toEqual(expected);
+  });
+
+  it.each([
+    ['a quote that would close the string', "'; DROP TABLE profiles; --"],
+    ['a boolean that would match every row', "' OR '1'='1"],
+    ['a comment marker', 'smith --'],
+  ])('treats %s as plain text, never as SQL', async (_label, name) => {
+    await expect(listIds({ name })).resolves.toEqual([]);
+    await expect(listIds({})).resolves.toEqual(['begum', 'john', 'jose']);
+  });
+
+  it('treats LIKE wildcards in the search as plain characters', async () => {
+    await expect(listIds({ name: '%' })).resolves.toEqual([]);
+    await expect(listIds({ name: '_' })).resolves.toEqual([]);
+  });
+
+  it('filters by country, and combines it with the name', async () => {
+    await expect(listIds({ country: 'Spain' })).resolves.toEqual(['jose']);
+    await expect(listIds({ country: 'United States', name: 'jose' })).resolves.toEqual([]);
+  });
+
+  it('pages through filtered results with the cursor', async () => {
+    const first = await request(app).get('/api/profiles').query({ country: 'United States', limit: '1' }).expect(200);
+    expect(first.body.nextCursor).toBeNull();
+
+    await savePerson('jane', 'Jane', 'Smith');
+    const page1 = await request(app).get('/api/profiles').query({ name: 'smith', limit: '1' }).expect(200);
+    const page2 = await request(app)
+      .get('/api/profiles')
+      .query({ name: 'smith', limit: '1', cursor: page1.body.nextCursor })
+      .expect(200);
+
+    expect([...page1.body.profiles, ...page2.body.profiles].map((profile: { id: string }) => profile.id)).toEqual([
+      'jane',
+      'john',
+    ]);
+    expect(page2.body.nextCursor).toBeNull();
+  });
+
+  it.each([
+    ['a country outside the list', { country: 'Atlantis' }],
+    ['too many words', { name: 'a b c d e f g h i' }],
+    ['ids with a filter', { ids: 'john', name: 'john' }],
+  ])('rejects %s with 400', async (_label, query) => {
+    await request(app).get('/api/profiles').query(query).expect(400);
+  });
+
+  it('lists the distinct countries of saved profiles, for the country filter', async () => {
+    const response = await request(app).get('/api/countries').expect(200);
+
+    expect(response.body).toEqual({ countries: ['Spain', 'Türkiye', 'United States'] });
+  });
+});

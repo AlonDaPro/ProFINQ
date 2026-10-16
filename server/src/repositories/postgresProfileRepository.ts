@@ -1,5 +1,5 @@
 import type { Pool } from 'pg';
-import type { Page, PageRequest } from '../domain/pagination.js';
+import type { ListFilter, Page, PageCursor, PageRequest } from '../domain/pagination.js';
 import type { Gender, Profile, ProfileDetails, SavedProfile, Title } from '../domain/profile/index.js';
 import type { ProfileRepository } from './profileRepository.js';
 
@@ -71,30 +71,51 @@ function detailValues(details: ProfileDetails): unknown[] {
   ];
 }
 
+/** LIKE treats % and _ as wildcards; a typed "50%" must match literally. Backslash is LIKE's escape. */
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (character) => `\\${character}`);
+}
+
+/** WHERE clauses for a page, with their parameters numbered in order. */
+function pageConditions(filter: ListFilter, after: PageCursor | undefined): { where: string; params: unknown[] } {
+  const params: unknown[] = [];
+  const param = (value: unknown) => {
+    params.push(value);
+    return `$${params.length}`;
+  };
+  const conditions: string[] = [];
+  if (after) conditions.push(`(saved_at, id) < (${param(after.savedAt)}::timestamptz, ${param(after.id)})`);
+  if (filter.country !== undefined) conditions.push(`country = ${param(filter.country)}`);
+  // The search term goes through the same function as the column, so both fold accents alike.
+  for (const word of filter.nameWords) {
+    conditions.push(`search_name LIKE '%' || profile_search_text(${param(escapeLike(word))}) || '%'`);
+  }
+  return { where: conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '', params };
+}
+
 export class PostgresProfileRepository implements ProfileRepository {
   constructor(private readonly pool: Pool) {}
 
-  async listPage({ limit, after }: PageRequest): Promise<Page<SavedProfile>> {
+  async listPage({ limit, after, filter }: PageRequest): Promise<Page<SavedProfile>> {
     // Keyset pagination: the row comparison walks the (saved_at DESC, id DESC) index, so page
     // 1,000 costs the same as page 1, and rows saved meanwhile never shift or repeat a page.
     // One extra row tells us whether another page exists, without a COUNT(*).
-    const fetchCount = limit + 1;
-    const result = after
-      ? await this.pool.query<ProfileRow>(
-          `SELECT ${PROFILE_COLUMNS} FROM profiles
-            WHERE (saved_at, id) < ($1::timestamptz, $2)
-            ORDER BY saved_at DESC, id DESC
-            LIMIT $3`,
-          [after.savedAt, after.id, fetchCount],
-        )
-      : await this.pool.query<ProfileRow>(
-          `SELECT ${PROFILE_COLUMNS} FROM profiles ORDER BY saved_at DESC, id DESC LIMIT $1`,
-          [fetchCount],
-        );
+    const { where, params } = pageConditions(filter, after);
+    const result = await this.pool.query<ProfileRow>(
+      `SELECT ${PROFILE_COLUMNS} FROM profiles ${where}
+        ORDER BY saved_at DESC, id DESC
+        LIMIT $${params.length + 1}`,
+      [...params, limit + 1],
+    );
     const items = result.rows.slice(0, limit).map(toSavedProfile);
     const last = items.at(-1);
     const hasMore = result.rows.length > limit;
     return { items, nextCursor: hasMore && last ? { savedAt: last.savedAt, id: last.id } : null };
+  }
+
+  async listCountries(): Promise<string[]> {
+    const result = await this.pool.query<{ country: string }>('SELECT DISTINCT country FROM profiles ORDER BY country');
+    return result.rows.map((row) => row.country);
   }
 
   async findByIds(ids: readonly string[]): Promise<SavedProfile[]> {

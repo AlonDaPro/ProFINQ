@@ -7,9 +7,14 @@ export interface Logger {
  * Logs an error's name, code, message and stack (and those of its causes), nothing else. A Postgres
  * error's `detail` can echo the whole failing row (emails, phone numbers), so it is never logged.
  */
+/** The `code` Node and Postgres errors carry (ECONNREFUSED, 23505, ...), if any. */
+export function errorCodeOf(error: Error): string | undefined {
+  return 'code' in error && typeof error.code === 'string' ? error.code : undefined;
+}
+
 export function describeError(error: unknown): Record<string, unknown> {
   if (!(error instanceof Error)) return { value: String(error) };
-  const code = 'code' in error && typeof error.code === 'string' ? error.code : undefined;
+  const code = errorCodeOf(error);
   return {
     name: error.name,
     message: error.message,

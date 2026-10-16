@@ -27,7 +27,6 @@ import {
 } from './profile.constants.js';
 import { isCountry } from './countries.js';
 
-/** Trimmed text with a length cap and no control or BiDi-override characters. */
 const text = (fieldName: string, maxLength: number) =>
   z
     .string()

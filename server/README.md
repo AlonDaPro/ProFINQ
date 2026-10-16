@@ -48,12 +48,16 @@ Invalid configuration stops the process at boot with a list of everything that i
 | `POST`   | `/api/profiles`     | Save a profile                                             | 201, 400, 409 |
 | `PUT`    | `/api/profiles/:id` | Replace every editable field (name, gender, contact, etc.) | 200, 400, 404 |
 | `DELETE` | `/api/profiles/:id` | Delete                                                     | 204, 400, 404 |
+| `GET`    | `/api/countries`    | Countries of saved profiles (History's filter options)     | 200           |
 | `GET`    | `/api/health`       | Liveness + database check                                  | 200, 503      |
 
 `GET /api/profiles` returns `{ "profiles": [...], "nextCursor": string | null }`.
 
 - `?limit=1..100` (default 20) sets the page size; `?cursor=` (the previous `nextCursor`) fetches the next page. Keyset pagination on `(saved_at, id)` uses the matching index, so every page costs the same, and rows saved meanwhile never shift a page.
-- `?ids=a,b,c` (up to 100) returns just those that are saved, in one query. Screen 1 uses it to mark saved people. It cannot be combined with `limit` / `cursor`.
+- `?name=` (words matched anywhere in the full name, in any order, ignoring case and accents) and `?country=` (one of the listed countries) narrow the list; History's filter runs here, so it covers every saved profile. A generated `search_name` column with a trigram index serves the name search, and a `(country, saved_at, id)` index the country filter.
+- `?ids=a,b,c` (up to 100) returns just those that are saved, in one query. Screen 1 uses it to mark saved people. It cannot be combined with other parameters.
+
+`GET /api/countries` returns `{ "countries": [...] }`: the distinct countries of saved profiles, the options of History's country filter.
 
 Every route may also answer `413` (body over 32 KB), `415` (unsupported charset or encoding), `429` (rate limit, with `RateLimit` headers) or `503` (database down). Errors always have the shape `{ "error": { "code", "message", "details?" } }`; on a `400`, `details` lists `{ path, message }` per field (`body.location.country`), which the client shows next to that input. Codes are listed in `src/constants/errorCode.ts`.
 

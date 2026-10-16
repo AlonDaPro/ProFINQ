@@ -7,8 +7,10 @@ import type { Profile, ProfileDetails, SavedProfile } from '../domain/profile/in
  * return values; turning them into domain errors is the service's job.
  */
 export interface ProfileRepository {
-  /** Newest first, in pages of at most `limit`. */
+  /** Newest first, in pages of at most `limit`, narrowed by `request.filter`. */
   listPage(request: PageRequest): Promise<Page<SavedProfile>>;
+  /** The distinct countries of saved profiles, alphabetically. */
+  listCountries(): Promise<string[]>;
   /** The saved profiles among `ids`; unknown ids are simply absent. */
   findByIds(ids: readonly string[]): Promise<SavedProfile[]>;
   findById(id: string): Promise<SavedProfile | null>;
