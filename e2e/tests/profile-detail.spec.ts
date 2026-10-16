@@ -160,10 +160,16 @@ test.describe('Screen 3: bidirectional text', () => {
         .first()
         .evaluate((element) => getComputedStyle(element).direction);
     expect(await direction('article')).toBe('rtl');
-    expect(await direction('article input')).toBe('ltr');
-    expect(await direction('a[href^="mailto:"]')).toBe('ltr');
-    expect(await direction('a[href^="tel:"]')).toBe('ltr');
-    await expect(page.locator('a[href^="tel:"]')).toHaveText('(272) 790-0888');
+    for (const control of [
+      page.getByRole('combobox', { name: he.title, exact: true }),
+      page.getByRole('combobox', { name: he.country, exact: true }),
+      page.getByLabel(he.email),
+      page.getByLabel(he.phone),
+    ]) {
+      expect(await control.evaluate((element) => getComputedStyle(element).direction)).toBe('ltr');
+    }
+    // Brackets and dashes would be reordered in an RTL context; the number must read as typed.
+    await expect(page.getByLabel(he.phone)).toHaveValue('(272) 790-0888');
   });
 
   test('the editable Latin name behaves LTR while typing', async ({ page }) => {

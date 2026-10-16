@@ -30,7 +30,14 @@ export default defineConfig({
       command: 'npm run build && npm start',
       cwd: '../server',
       url: `http://localhost:${API_PORT}/api/health`,
-      env: { PORT: String(API_PORT), DATABASE_URL, CORS_ORIGINS: WEB_URL },
+      // The suite writes far faster than a person; the rate limit has its own server test.
+      env: {
+        PORT: String(API_PORT),
+        DATABASE_URL,
+        CORS_ORIGINS: WEB_URL,
+        RATE_LIMIT_READS_PER_MINUTE: '100000',
+        RATE_LIMIT_WRITES_PER_MINUTE: '100000',
+      },
       timeout: SERVER_START_TIMEOUT_MS,
       reuseExistingServer: !process.env.CI,
     },

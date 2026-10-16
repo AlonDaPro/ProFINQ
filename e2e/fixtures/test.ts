@@ -18,20 +18,70 @@ export const he = {
   discard: 'יציאה בלי שמירה',
   savedStamp: 'שמור במאגר',
   savedFeedback: 'הפרופיל נשמר במאגר',
-  updatedLocal: 'השם עודכן ברשימה',
-  updatedSaved: 'השם עודכן במאגר',
+  updatedLocal: 'הפרטים עודכנו ברשימה',
+  updatedSaved: 'הפרטים עודכנו במאגר',
+  fixFields: 'השרת דחה חלק מהשדות',
+  tooManyRequests: 'יותר מדי בקשות',
+  invalidFormOne: 'יש לתקן שדה אחד לפני השמירה',
+  title: 'תואר',
+  clearTitle: 'ניקוי התואר',
   firstName: 'שם פרטי',
   lastName: 'שם משפחה',
   gender: 'מגדר',
+  dateOfBirth: 'תאריך לידה',
+  streetNumber: 'מספר בית',
+  street: 'רחוב',
+  city: 'עיר',
+  state: 'מחוז',
+  country: 'ארץ',
+  email: 'דוא״ל',
+  phone: 'טלפון',
+  age: 'גיל',
+  female: 'נקבה',
   required: 'שדה חובה',
+  invalidEmail: 'כתובת דוא״ל לא תקינה',
+  invalidPhone: 'מספר טלפון לא תקין',
+  notWholeNumber: 'מספר שלם בלבד',
+  invalidName: 'אותיות בלבד',
   notFound: 'הפרופיל לא נמצא',
 } as const;
 
+interface ProfilePage {
+  profiles: { id: string }[];
+  nextCursor: string | null;
+}
+
+/** Deletes every saved profile, page by page (the list endpoint is paginated). */
 async function deleteAllSavedProfiles(request: APIRequestContext): Promise<void> {
-  const response = await request.get('/api/profiles');
-  expect(response.ok()).toBe(true);
-  const { profiles } = (await response.json()) as { profiles: { id: string }[] };
-  await Promise.all(profiles.map((profile) => request.delete(`/api/profiles/${profile.id}`)));
+  for (;;) {
+    const response = await request.get('/api/profiles?limit=100');
+    expect(response.ok()).toBe(true);
+    const { profiles } = (await response.json()) as ProfilePage;
+    if (profiles.length === 0) return;
+    await Promise.all(profiles.map((profile) => request.delete(`/api/profiles/${profile.id}`)));
+  }
+}
+
+/** Saves `count` valid profiles straight through the API, newest last. */
+export async function seedSavedProfiles(request: APIRequestContext, count: number): Promise<void> {
+  for (let index = 0; index < count; index++) {
+    const response = await request.post('/api/profiles', {
+      data: {
+        id: `seed-${String(index).padStart(3, '0')}`,
+        name: { title: 'Ms', first: 'Seed', last: `Person ${String.fromCharCode(65 + (index % 26))}` },
+        gender: 'female',
+        email: `seed${index}@example.com`,
+        phone: '058-6043122',
+        picture: {
+          large: 'https://randomuser.me/api/portraits/women/1.jpg',
+          thumbnail: 'https://randomuser.me/api/portraits/thumb/women/1.jpg',
+        },
+        location: { streetNumber: index + 1, streetName: 'Herzl', city: 'Haifa', state: '', country: 'Israel' },
+        dateOfBirth: '1990-01-01',
+      },
+    });
+    expect(response.status()).toBe(201);
+  }
 }
 
 export async function stubRandomUser(page: Page): Promise<void> {

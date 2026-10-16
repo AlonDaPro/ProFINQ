@@ -56,7 +56,7 @@ const PEOPLE: Person[] = [
   {
     uuid: 'e2e00000-0000-4000-8000-000000000003',
     gender: 'male',
-    title: 'آقای',
+    title: 'Mr',
     first: 'نیما',
     last: 'رضایی',
     country: 'Iran',
