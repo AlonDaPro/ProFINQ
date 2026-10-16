@@ -84,15 +84,15 @@ The client talks to two backends. randomuser.me is called straight from the brow
 
 ## Tests
 
-Every package has an `npm run check` that runs the type checker, ESLint, Prettier and its tests.
+Every package has an `npm run check`: the type checker and Prettier everywhere, plus ESLint and the unit or integration tests in `server/` and `client/`.
 
 | Where     | Command         | Covers                                                                              |
 | --------- | --------------- | ----------------------------------------------------------------------------------- |
-| `server/` | `npm run check` | 162 tests: API, validation, pagination and query plans on a real PostgreSQL         |
-| `client/` | `npm run check` | 150 unit and component tests (form rules, stores, API adapters, the profile screen) |
-| `e2e/`    | `npm test`      | 48 Playwright runs on production builds, desktop and mobile, with axe               |
+| `server/` | `npm run check` | 173 tests: API, validation, pagination and query plans on a real PostgreSQL         |
+| `client/` | `npm run check` | 158 unit and component tests (form rules, stores, API adapters, the profile screen) |
+| `e2e/`    | `npm test`      | 50 Playwright runs on production builds, desktop and mobile, with axe               |
 
-GitHub Actions runs all three on every push ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+GitHub Actions runs all three on every push to `main` and every pull request ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
 ## Author
 
