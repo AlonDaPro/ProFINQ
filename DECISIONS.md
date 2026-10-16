@@ -2,34 +2,44 @@
 
 ## 1. "Saved" is decided by the database, not by the screen you came from
 
-Read literally, Save shows when you come from Screen 1. But save someone, go back and reopen them, and you'd get Save again, and it would fail. So Screen 3 asks the saved store whether the id is in the DB. The route (`/random/:id` vs `/saved/:id`) only picks the Back target. After Save the URL becomes `/saved/:id`, so a reload still works. A 409 on Save or a 404 on Delete counts as success, because the user's intent is already met.
-**Tradeoff:** Screen 1 makes one extra request to mark people who are already saved.
+Read literally, Save shows when you come from Screen 1. But save someone, go back and reopen them, and Save would show again and fail. So Screen 3 asks the server whether the id is saved; the route (`/random/:id` vs `/saved/:id`) only picks the Back target. A 409 on Save or a 404 on Delete counts as success: the user's intent is already met.
+**Tradeoff:** Screen 1 makes one batched `?ids=` request to mark people already saved.
 
-## 2. Filters live in the URL and apply instantly, without debounce
+## 2. Filters live in the URL and apply instantly
 
-Two inputs: free-text name (any word order, case- and accent-insensitive: "garcia jose" finds "José García") and a country `<select>` built from the data. In `?name=&country=` the filter survives Screen 3 and back, reloads and back/forward, and can be shared. Names are normalized once per data change, so a debounce would only add lag.
-**Tradeoff:** History filters on the client too. At thousands of rows: server-side `ILIKE` + trigram index, a 250 ms debounce, and aborting stale requests.
+Name matches in any word order, ignoring case and accents ("garcia jose" finds "José García"); country is a `<select>` built from the data. Kept in `?name=&country=`, the filter survives Screen 3, reloads and back/forward.
+**Tradeoff:** History filters only the loaded pages. At scale: server-side search with a trigram index.
 
-## 3. PostgreSQL, typed columns, one atomic statement per operation
+## 3. PostgreSQL with typed columns and keyset pagination
 
-Real columns, not a `jsonb` blob: readable in any SQL client, guarded by CHECK constraints, indexable. Duplicate detection is one `INSERT … ON CONFLICT DO NOTHING RETURNING`, so a double click or two tabs give exactly one row and a 409 (tested with 8 parallel requests). A `(saved_at DESC, id)` index serves the newest-first list without a sort step (asserted on the query plan). Migrations are versioned, transactional and serialized by an advisory lock.
-**Tradeoff:** more setup than a JSON file (Docker), and a hand-rolled migration runner; beyond one table I'd use `node-pg-migrate`.
+Real columns with CHECK constraints, not a JSON blob. A duplicate save is one `INSERT … ON CONFLICT DO NOTHING`, so a double click gives one row and a 409. History pages by `(saved_at, id)` with an opaque cursor, served by a matching index (asserted on the query plan): page 1,000 costs the same as page 1.
+**Tradeoff:** needs Docker, and the migration runner is hand-rolled.
 
-**Also:** validation is strict on what users edit and loose on read-only upstream data. Probing 6,000 live randomuser.me records found emails like `hans-j..diederich@example.com` that fail RFC checks and made Save fail. Pinia, because the random batch must outlive the list view (edits on Screen 3 show on Screen 1); mutations are pessimistic. UI: shadcn-vue on Tailwind v4, re-themed with FINQ-style tokens. Reka UI brings accessible primitives (a focus-trapped AlertDialog, labelled inputs), and owning the component code let me make the buttons pills and keep a native `<select>` for phones. The cost is a larger bundle (main JS 177 KB to 262 KB, 88 KB gzipped) and a Tailwind build step.
+## 4. Pinia for state
+
+The random batch must outlive the list view (an edit on Screen 3 shows on Screen 1), and saved profiles are shared by three screens. Mutations are pessimistic: the UI changes after the server agrees.
+**Tradeoff:** a dependency for what a few `reactive` modules could do, in exchange for devtools and a clear owner per piece of state.
+
+## 5. shadcn-vue on Tailwind, themed to FINQ
+
+Reka UI gives accessible primitives (focus-trapped dialog, searchable comboboxes for title and country), and owning the component code let me restyle them freely.
+**Tradeoff:** a larger bundle and a CSS build step.
+
+## Validation
+
+Every field is editable and validated twice, with the same rules: zod in the form (Save stays disabled, the error shows on the field) and zod on the server, which is the authority. Title and country are closed lists (ISO 3166-1 names), picked rather than typed. Phones are checked by structure, not per country: libphonenumber would reject randomuser.me's synthetic numbers and any number typed without its country code.
 
 ## RTL / LTR on Screen 3
 
-- Only Screen 3 is `<article dir="rtl" lang="he">`. Layout CSS uses logical properties, so it mirrors with no overrides.
-- **Data never inherits the Hebrew direction.** Name inputs are `dir="auto"`: a Latin name stays LTR while typing (caret, selection, brackets), and a Persian name is not forced the wrong way. Email and phone are `dir="ltr"` (a phone is all neutral characters; RTL reorders `(272) 790-0888`). Address parts and English server errors are in `<bdi>`.
-- Buttons follow RTL order: primary on the right, Back at the far end, with a chevron that mirrors via `:dir(rtl)`. The confirm dialog renders outside the article, so it carries its own `dir`. Playwright asserts the computed directions.
+Only Screen 3 is `<article dir="rtl" lang="he">`; layout uses logical CSS properties, so it mirrors with no overrides. Data never inherits the Hebrew direction: names are `dir="auto"` (Latin stays LTR, Persian stays RTL), while title, country, email and phone are `dir="ltr"`, because RTL would reorder `(272) 790-0888`. Back's chevron mirrors via `:dir(rtl)`, and the dialog carries its own `dir`. Playwright asserts the computed directions.
 
 ## Corners cut deliberately
 
-- No pagination on `GET /api/profiles` → keyset pagination on `(saved_at, id)`, whose index already exists.
-- API contract duplicated as zod schemas on both sides → a shared package or OpenAPI codegen.
-- The random batch is memory-only, so a reload loses it (Screen 3 says so) → `sessionStorage`.
-- Copy in TS modules, not `vue-i18n`. No request logging, metrics or rate limiting → pino with request ids, limits at the gateway.
+- Fetch replaces the batch, so unsaved edits to the previous one are lost → keep it in `sessionStorage`.
+- No deployment → Render + Neon, with E2E against the preview URL.
+- The API contract is duplicated as zod schemas on both sides → a shared package.
+- The extension took longer than 30 minutes.
 
 ## Extension: critical-path tests in a real browser
 
-36 Playwright tests (desktop + mobile) cover Fetch → filter → edit → Save → History → Update → Delete, BiDi computed directions, keyboard-only use and an axe WCAG 2.1 AA scan. They run against production builds on real Postgres, in CI. I picked tests because the spec's implicit rules break silently. On the first run they caught a real bug: Enter in the name form didn't submit. Next hour: deploy (Render + Neon) and run E2E against the preview URL.
+Playwright runs the whole journey against production builds on real Postgres, in CI: Fetch → filter → edit every field → Save → History → Update → Delete, plus validation errors, server rejections, pagination, BiDi directions, keyboard-only use and an axe WCAG 2.1 AA scan, on desktop and mobile. I chose tests because the spec's implicit rules break silently. They caught real bugs, such as Enter not submitting the form.

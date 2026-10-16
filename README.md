@@ -24,12 +24,12 @@ The reasoning behind the main choices is in [DECISIONS.md](DECISIONS.md), and ho
 
 ## Screens
 
-| Screen     | Route                       | What you can do                                                                |
-| ---------- | --------------------------- | ------------------------------------------------------------------------------ |
-| 0. Home    | `/`                         | **Fetch** ten new people, or open **History**                                  |
-| 1. Random  | `/random`                   | Browse the batch, filter by name and country (the filter lives in the URL)     |
-| 2. History | `/saved`                    | The same list, loaded from the database                                        |
-| 3. Profile | `/random/:id`, `/saved/:id` | Edit the name, then **Save**, **Update** or **Delete** (Hebrew, right-to-left) |
+| Screen     | Route                       | What you can do                                                                 |
+| ---------- | --------------------------- | ------------------------------------------------------------------------------- |
+| 0. Home    | `/`                         | **Fetch** ten new people, or open **History**                                   |
+| 1. Random  | `/random`                   | Browse the batch, filter by name and country (the filter lives in the URL)      |
+| 2. History | `/saved`                    | The same list, loaded from the database 20 at a time                            |
+| 3. Profile | `/random/:id`, `/saved/:id` | Edit any field, then **Save**, **Update** or **Delete** (Hebrew, right-to-left) |
 
 Save appears only for people who are not in the database yet, and Delete only for people who are. Update writes to the database for saved people, and to the in-memory list for everyone else.
 
@@ -76,11 +76,11 @@ The client talks to two backends. randomuser.me is called straight from the brow
 
 Every package has an `npm run check` that runs the type checker, ESLint, Prettier and its tests.
 
-| Where     | Command         | Covers                                                                 |
-| --------- | --------------- | ---------------------------------------------------------------------- |
-| `server/` | `npm run check` | 39 tests, mostly API integration tests against a real PostgreSQL       |
-| `client/` | `npm run check` | 39 unit and component tests (stores, domain rules, the profile screen) |
-| `e2e/`    | `npm test`      | 36 Playwright tests on production builds, desktop and mobile, with axe |
+| Where     | Command         | Covers                                                                              |
+| --------- | --------------- | ----------------------------------------------------------------------------------- |
+| `server/` | `npm run check` | 162 tests: API, validation, pagination and query plans on a real PostgreSQL         |
+| `client/` | `npm run check` | 150 unit and component tests (form rules, stores, API adapters, the profile screen) |
+| `e2e/`    | `npm test`      | 48 Playwright runs on production builds, desktop and mobile, with axe               |
 
 GitHub Actions runs all three on every push ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
