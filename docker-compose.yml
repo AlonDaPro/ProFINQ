@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: profiles-postgres
+    environment:
+      POSTGRES_USER: profiles
+      POSTGRES_PASSWORD: profiles
+      POSTGRES_DB: profiles
+    ports:
+      # Override with POSTGRES_PORT=5433 if a local Postgres already uses 5432.
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - profiles-data:/var/lib/postgresql/data
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U profiles -d profiles']
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  profiles-data:
