@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 790" width="1280" height="790" font-family="Rubik, 'Segoe UI', -apple-system, Helvetica, Arial, sans-serif">
+  <title>Profinq system architecture</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10z" fill="#222"/>
+    </marker>
+    <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="1" fill="#e8e6ef"/>
+    </pattern>
+    <style>
+      .tier-label { font-size: 13px; fill: #5f5f6b; }
+      .tier-title { font-size: 19px; font-weight: 600; fill: #222; }
+      .box { fill: #fff; stroke: #cfccd9; stroke-width: 1.2; }
+      .box-title { font-size: 15px; font-weight: 600; fill: #222; }
+      .box-line { font-size: 13px; fill: #5f5f6b; }
+      .wire { stroke: #222; stroke-width: 1.6; fill: none; }
+      .wire-soft { stroke: #5f5f6b; stroke-width: 1.2; fill: none; }
+      .wire-label { font-size: 12.5px; fill: #222; }
+      .chip { fill: #fff; stroke: #cfccd9; stroke-width: 1.2; }
+    </style>
+  </defs>
+
+  <!-- Canvas -->
+  <rect width="1280" height="790" rx="20" fill="#fff"/>
+  <rect width="1280" height="790" rx="20" fill="url(#dots)"/>
+  <rect x="0.5" y="0.5" width="1279" height="789" rx="20" fill="none" stroke="#e8e6ef"/>
+
+  <text x="40" y="58" font-size="26" font-weight="600" fill="#222" letter-spacing="-0.5">Profinq</text>
+  <text x="40" y="82" font-size="14" fill="#5f5f6b">How a request moves from the browser to PostgreSQL</text>
+
+  <!-- Browser tier -->
+  <rect x="40" y="110" width="380" height="440" rx="18" fill="#f5f0ff" stroke="#cdb6ff" stroke-width="1.4"/>
+  <text x="64" y="140" class="tier-label">Browser</text>
+  <text x="64" y="164" class="tier-title">Vue 3 client</text>
+
+  <rect x="64" y="184" width="332" height="92" rx="12" class="box"/>
+  <text x="84" y="212" class="box-title">Views</text>
+  <text x="84" y="236" class="box-line">Home, Random, Saved</text>
+  <text x="84" y="258" class="box-line">Profile detail in Hebrew, right-to-left</text>
+
+  <rect x="64" y="300" width="332" height="92" rx="12" class="box"/>
+  <text x="84" y="328" class="box-title">Pinia stores</text>
+  <text x="84" y="352" class="box-line">randomProfiles: the batch, kept in memory</text>
+  <text x="84" y="374" class="box-line">savedProfiles: server state, pessimistic writes</text>
+
+  <rect x="64" y="416" width="332" height="104" rx="12" fill="#fff" stroke="#222" stroke-width="1.4"/>
+  <text x="84" y="444" class="box-title">API layer</text>
+  <text x="84" y="468" class="box-line">fetch with timeout and cancellation</text>
+  <text x="84" y="490" class="box-line">Every response validated with zod</text>
+  <text x="84" y="510" class="box-line">randomuser.me mapped to one Profile type</text>
+
+  <path d="M230 276v22" class="wire-soft" marker-end="url(#arrow)"/>
+  <path d="M230 392v22" class="wire-soft" marker-end="url(#arrow)"/>
+
+  <!-- External API -->
+  <rect x="40" y="636" width="380" height="96" rx="18" fill="#f6e4b9" stroke="#e2b866" stroke-width="1.4"/>
+  <text x="64" y="666" class="tier-label">External</text>
+  <text x="64" y="690" class="tier-title">randomuser.me</text>
+  <text x="64" y="714" class="box-line">Ten people per fetch, read-only</text>
+
+  <path d="M230 520v114" class="wire" marker-end="url(#arrow)"/>
+  <text x="244" y="590" class="wire-label">HTTPS, ?results=10</text>
+
+  <!-- Server tier -->
+  <rect x="520" y="330" width="380" height="410" rx="18" fill="#eef9f0" stroke="#a6dcb3" stroke-width="1.4"/>
+  <text x="544" y="360" class="tier-label">Server</text>
+  <text x="544" y="384" class="tier-title">Node + Express 5 API</text>
+
+  <rect x="544" y="416" width="332" height="104" rx="12" class="box"/>
+  <text x="564" y="444" class="box-title">HTTP layer</text>
+  <text x="564" y="468" class="box-line">Security headers, CORS, 32 KB body limit</text>
+  <text x="564" y="490" class="box-line">Routes parse input with zod</text>
+  <text x="564" y="510" class="box-line">One error handler: { error: { code, message } }</text>
+
+  <rect x="544" y="544" width="332" height="72" rx="12" class="box"/>
+  <text x="564" y="572" class="box-title">ProfileService</text>
+  <text x="564" y="596" class="box-line">Business rules: not found, already saved</text>
+
+  <rect x="544" y="640" width="332" height="72" rx="12" class="box"/>
+  <text x="564" y="668" class="box-title">PostgresProfileRepository</text>
+  <text x="564" y="692" class="box-line">One atomic SQL statement per operation</text>
+
+  <path d="M710 520v22" class="wire-soft" marker-end="url(#arrow)"/>
+  <path d="M710 616v22" class="wire-soft" marker-end="url(#arrow)"/>
+
+  <path d="M396 468h146" class="wire" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text x="410" y="456" class="wire-label">REST + JSON</text>
+  <text x="410" y="490" class="wire-label">/api/profiles</text>
+
+  <!-- Database -->
+  <path d="M1020 500a110 20 0 0 1 220 0v220a110 20 0 0 1-220 0z" fill="#f5f0ff" stroke="#222" stroke-width="1.4"/>
+  <path d="M1020 500a110 20 0 0 0 220 0" fill="none" stroke="#222" stroke-width="1.4"/>
+  <text x="1042" y="556" class="tier-label">Database</text>
+  <text x="1042" y="580" class="tier-title">PostgreSQL 16</text>
+  <text x="1042" y="614" class="box-line">profiles (typed columns)</text>
+  <text x="1042" y="636" class="box-line">schema_migrations</text>
+  <text x="1042" y="658" class="box-line">Index on (saved_at DESC, id)</text>
+
+  <path d="M876 676h142" class="wire" marker-end="url(#arrow)"/>
+  <text x="890" y="664" class="wire-label">pg pool</text>
+  <text x="890" y="698" class="wire-label">parameterized SQL</text>
+
+  <!-- Quality -->
+  <rect x="520" y="110" width="720" height="186" rx="18" fill="#fff" stroke="#cfccd9" stroke-width="1.4" stroke-dasharray="6 6"/>
+  <text x="544" y="140" class="tier-label">Quality</text>
+  <text x="544" y="164" class="tier-title">Tests and CI</text>
+
+  <rect x="544" y="184" width="160" height="88" rx="12" class="chip"/>
+  <text x="560" y="210" class="box-title">Client</text>
+  <text x="560" y="232" class="box-line">Vitest and</text>
+  <text x="560" y="252" class="box-line">Vue Test Utils</text>
+
+  <rect x="720" y="184" width="160" height="88" rx="12" class="chip"/>
+  <text x="736" y="210" class="box-title">Server</text>
+  <text x="736" y="232" class="box-line">supertest against</text>
+  <text x="736" y="252" class="box-line">a real Postgres</text>
+
+  <rect x="896" y="184" width="160" height="88" rx="12" class="chip"/>
+  <text x="912" y="210" class="box-title">End to end</text>
+  <text x="912" y="232" class="box-line">Playwright and axe</text>
+  <text x="912" y="252" class="box-line">on production builds</text>
+
+  <rect x="1072" y="184" width="144" height="88" rx="12" fill="#222"/>
+  <text x="1088" y="210" font-size="15" font-weight="600" fill="#fff">CI</text>
+  <text x="1088" y="232" font-size="13" fill="#cdb6ff">GitHub Actions</text>
+  <text x="1088" y="252" font-size="13" fill="#cdb6ff">on every push</text>
+</svg>
