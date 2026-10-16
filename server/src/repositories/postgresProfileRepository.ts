@@ -3,7 +3,7 @@ import type { Page, PageRequest } from '../domain/pagination.js';
 import type { Gender, Profile, ProfileDetails, SavedProfile, Title } from '../domain/profile/index.js';
 import type { ProfileRepository } from './profileRepository.js';
 
-/** A `profiles` row. The CHECK constraints from migration 3 guarantee the enum columns. */
+/** A `profiles` row. The CHECK constraints from migration 1 guarantee the enum columns. */
 interface ProfileRow {
   id: string;
   title: Title | '';
@@ -100,7 +100,7 @@ export class PostgresProfileRepository implements ProfileRepository {
   async findByIds(ids: readonly string[]): Promise<SavedProfile[]> {
     if (ids.length === 0) return [];
     const result = await this.pool.query<ProfileRow>(
-      `SELECT ${PROFILE_COLUMNS} FROM profiles WHERE id = ANY($1::text[])`,
+      `SELECT ${PROFILE_COLUMNS} FROM profiles WHERE id = ANY($1::text[]) ORDER BY saved_at DESC, id DESC`,
       [ids],
     );
     return result.rows.map(toSavedProfile);

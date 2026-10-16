@@ -33,7 +33,7 @@ On startup the server waits for the database (up to ~10 s), applies any pending 
 | `DB_POOL_SIZE`                 | no       | `10`                                                        | Maximum pooled connections (1-100)                                             |
 | `CORS_ORIGINS`                 | no       | `http://localhost:5173`                                     | Comma-separated list of exact allowed browser origins                          |
 | `TRUST_PROXY_HOPS`             | no       | `0`                                                         | Proxies in front of the API, so rate limits see the real client IP             |
-| `RATE_LIMIT_READS_PER_MINUTE`  | no       | `300`                                                       | `GET` requests per client IP per minute                                        |
+| `RATE_LIMIT_READS_PER_MINUTE`  | no       | `300`                                                       | Reads (`GET`, `HEAD`, `OPTIONS`) per client IP per minute                      |
 | `RATE_LIMIT_WRITES_PER_MINUTE` | no       | `60`                                                        | `POST` / `PUT` / `DELETE` requests per client IP per minute                    |
 | `TEST_DATABASE_URL`            | tests    | `postgres://profiles:profiles@localhost:5432/profiles_test` | Used by `npm test`. The name must end in `_test` (the suite truncates tables). |
 
@@ -48,31 +48,35 @@ Invalid configuration stops the process at boot with a list of everything that i
 | `POST`   | `/api/profiles`     | Save a profile                                             | 201, 400, 409 |
 | `PUT`    | `/api/profiles/:id` | Replace every editable field (name, gender, contact, etc.) | 200, 400, 404 |
 | `DELETE` | `/api/profiles/:id` | Delete                                                     | 204, 400, 404 |
-| `GET`    | `/api/health`       | Liveness + database check (not rate limited)               | 200, 503      |
+| `GET`    | `/api/health`       | Liveness + database check                                  | 200, 503      |
 
 `GET /api/profiles` returns `{ "profiles": [...], "nextCursor": string | null }`.
 
 - `?limit=1..100` (default 20) sets the page size; `?cursor=` (the previous `nextCursor`) fetches the next page. Keyset pagination on `(saved_at, id)` uses the matching index, so every page costs the same, and rows saved meanwhile never shift a page.
 - `?ids=a,b,c` (up to 100) returns just those that are saved, in one query. Screen 1 uses it to mark saved people. It cannot be combined with `limit` / `cursor`.
 
-Every route may also answer `413` (body over 32 KB), `415` (not JSON), `429` (rate limit, with `RateLimit` headers) or `503` (database down). Errors always have the shape `{ "error": { "code", "message", "details?" } }`; on a `400`, `details` lists `{ path, message }` per field (`body.location.country`), which the client shows next to that input. Codes are listed in `src/constants/errorCode.ts`.
+Every route may also answer `413` (body over 32 KB), `415` (unsupported charset or encoding), `429` (rate limit, with `RateLimit` headers) or `503` (database down). Errors always have the shape `{ "error": { "code", "message", "details?" } }`; on a `400`, `details` lists `{ path, message }` per field (`body.location.country`), which the client shows next to that input. Codes are listed in `src/constants/errorCode.ts`.
 
 **Validation** (`src/domain/profile/profile.schema.ts`): names are letters with spaces, apostrophes, dots and hyphens; title, gender and country come from closed lists (`Title`, `Gender`, ISO 3166-1 `COUNTRIES`); the street number is a JSON integer 1-99999; the date of birth is a calendar date `YYYY-MM-DD`, from 1900 to today; phones accept any common format (`058-6043122`, `+972 (58) 604-3122`, `030/1234567`, `1-800-FLOWERS`, extensions) with 5-20 dialable characters; control and BiDi-override characters are rejected everywhere.
 
 ## Scripts
 
-| Script          | Does                                                           |
-| --------------- | -------------------------------------------------------------- |
-| `npm run dev`   | Run from source with reload                                    |
-| `npm run build` | Compile to `dist/`                                             |
-| `npm test`      | Integration tests (supertest → Express → real PostgreSQL)      |
-| `npm run check` | typecheck + lint (typescript-eslint strict) + Prettier + tests |
+| Script            | Does                                                           |
+| ----------------- | -------------------------------------------------------------- |
+| `npm run dev`     | Run from source with reload                                    |
+| `npm run migrate` | Apply pending migrations and exit                              |
+| `npm run build`   | Compile to `dist/`                                             |
+| `npm test`        | Integration tests (supertest → Express → real PostgreSQL)      |
+| `npm run check`   | typecheck + lint (typescript-eslint strict) + Prettier + tests |
 
 ## Structure
 
 ```
 src/
-  index.ts           composition root: config → pool → migrations → app → graceful shutdown
+  index.ts           long-running server: config → pool → migrations → listen → graceful shutdown
+  serverless.ts      Vercel Functions entry: exports the app, no startup work
+  migrate.ts         `npm run migrate`: applies pending migrations (the deploy's build step)
+  compose.ts         wires config → pool → repository → service → app, for both entries
   app.ts             Express app factory (dependencies injected, so tests build their own)
   config/            environment parsing and validation (zod)
   constants/         HttpStatus, ErrorCode and ApiPath enums, request and page limits

@@ -14,7 +14,7 @@ export abstract class DomainError extends Error {
 export class ProfileNotFoundError extends DomainError {
   readonly code = ErrorCode.ProfileNotFound;
 
-  constructor(readonly profileId: string) {
+  constructor(profileId: string) {
     super(`Profile "${profileId}" was not found`);
   }
 }
@@ -22,7 +22,7 @@ export class ProfileNotFoundError extends DomainError {
 export class ProfileAlreadyExistsError extends DomainError {
   readonly code = ErrorCode.ProfileAlreadyExists;
 
-  constructor(readonly profileId: string) {
+  constructor(profileId: string) {
     super(`Profile "${profileId}" is already saved`);
   }
 }

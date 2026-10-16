@@ -128,6 +128,9 @@ describe('profileSchema: pictures', () => {
     ['a javascript: URL', 'javascript:alert(1)'],
     ['a data: URL', 'data:image/png;base64,AAAA'],
     ['not a URL at all', 'nope'],
+    ['a URL with credentials', 'https://user:pw@randomuser.me/api/portraits/women/1.jpg'],
+    ['a URL with a port', 'https://randomuser.me:8443/api/portraits/women/1.jpg'],
+    ['a URL with a NUL character', 'https://randomuser.me/api/portraits/women/1\u0000.jpg'],
   ])('rejects %s', (_label, url) => {
     const result = profileSchema.safeParse(withValue(buildProfile(), 'picture.large', url));
     expect(result.success).toBe(false);
@@ -135,6 +138,12 @@ describe('profileSchema: pictures', () => {
 
   it('accepts randomuser.me portraits over https', () => {
     expect(profileSchema.safeParse(buildProfile()).success).toBe(true);
+  });
+
+  it('stores the normalized URL, not the raw input', () => {
+    const raw = '  https://RandomUser.me/api/portraits/women/1.jpg';
+    const parsed = profileSchema.parse(withValue(buildProfile(), 'picture.large', raw));
+    expect(parsed.picture.large).toBe('https://randomuser.me/api/portraits/women/1.jpg');
   });
 });
 

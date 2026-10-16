@@ -18,6 +18,17 @@ describe('loadConfig', () => {
     });
   });
 
+  it('treats an empty value (KEY= in .env) as unset, so the default applies', () => {
+    const config = loadConfig({ DATABASE_URL, PORT: '', DB_POOL_SIZE: '', CORS_ORIGINS: '', TRUST_PROXY_HOPS: '' });
+
+    expect(config).toMatchObject({
+      PORT: 4000,
+      DB_POOL_SIZE: 10,
+      CORS_ORIGINS: ['http://localhost:5173'],
+      TRUST_PROXY_HOPS: 0,
+    });
+  });
+
   it('lists every problem at once', () => {
     expect(() => loadConfig({ PORT: 'abc' })).toThrow(/PORT[\s\S]*DATABASE_URL/);
   });
@@ -27,7 +38,7 @@ describe('loadConfig', () => {
   });
 
   it.each([
-    ['an empty list', ''],
+    ['a list with no origins', ','],
     ['a wildcard', '*'],
     ['a trailing slash', 'https://app.example.com/'],
     ['a path', 'https://app.example.com/app'],

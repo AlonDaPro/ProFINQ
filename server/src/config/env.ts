@@ -12,11 +12,15 @@ const DEFAULT_WRITES_PER_MINUTE = 60;
 /** `cors` compares origins by exact string, so "https://a.com/" or "*" would silently match nothing. */
 const isExactOrigin = (value: string) => URL.canParse(value) && new URL(value).origin === value;
 
+/** `KEY=` (empty) in a .env file means "not set": use the default instead of failing on "". */
+const emptyAsUnset = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((value) => (value === '' ? undefined : value), schema);
+
 const positiveInt = (fallback: number, max = Number.MAX_SAFE_INTEGER) =>
-  z.coerce.number().int().min(1).max(max).default(fallback);
+  emptyAsUnset(z.coerce.number().int().min(1).max(max).default(fallback));
 
 const envSchema = z.object({
-  PORT: z.coerce.number().int().min(1).max(MAX_PORT).default(DEFAULT_PORT),
+  PORT: emptyAsUnset(z.coerce.number().int().min(1).max(MAX_PORT).default(DEFAULT_PORT)),
   DATABASE_URL: z
     .string({ required_error: 'DATABASE_URL is required (see .env.example)' })
     .refine(
@@ -24,9 +28,7 @@ const envSchema = z.object({
       'DATABASE_URL must be a postgres:// connection string',
     ),
   DB_POOL_SIZE: positiveInt(DEFAULT_DB_POOL_SIZE, MAX_DB_POOL_SIZE),
-  CORS_ORIGINS: z
-    .string()
-    .default(DEFAULT_CORS_ORIGINS)
+  CORS_ORIGINS: emptyAsUnset(z.string().default(DEFAULT_CORS_ORIGINS))
     .transform((value) =>
       value
         .split(',')
@@ -39,7 +41,7 @@ const envSchema = z.object({
       'CORS_ORIGINS entries must be exact origins like https://app.example.com (no path, no trailing slash, no *)',
     ),
   /** Proxy hops to trust for the client IP (rate limiting). 0 locally; 1 behind one load balancer. */
-  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
+  TRUST_PROXY_HOPS: emptyAsUnset(z.coerce.number().int().min(0).default(0)),
   RATE_LIMIT_READS_PER_MINUTE: positiveInt(DEFAULT_READS_PER_MINUTE),
   RATE_LIMIT_WRITES_PER_MINUTE: positiveInt(DEFAULT_WRITES_PER_MINUTE),
 });

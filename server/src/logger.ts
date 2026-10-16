@@ -4,8 +4,8 @@ export interface Logger {
 }
 
 /**
- * Logs only an error's name, code and message (and those of its causes). A Postgres error's
- * `detail` can echo the whole failing row (emails, phone numbers), so it is never logged.
+ * Logs an error's name, code, message and stack (and those of its causes), nothing else. A Postgres
+ * error's `detail` can echo the whole failing row (emails, phone numbers), so it is never logged.
  */
 export function describeError(error: unknown): Record<string, unknown> {
   if (!(error instanceof Error)) return { value: String(error) };
@@ -14,6 +14,7 @@ export function describeError(error: unknown): Record<string, unknown> {
     name: error.name,
     message: error.message,
     ...(code === undefined ? {} : { code }),
+    ...(error.stack === undefined ? {} : { stack: error.stack }),
     ...(error.cause === undefined ? {} : { cause: describeError(error.cause) }),
   };
 }

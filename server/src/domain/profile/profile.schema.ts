@@ -68,16 +68,25 @@ const isPhoneNumber = (value: string) => {
   );
 };
 
-// Picture URLs are rendered straight into <img src>; only https portraits from randomuser.me
-// are accepted, so javascript:/data: payloads and tracking pixels never reach the database.
+// Picture URLs are rendered straight into <img src>; only plain https portraits from randomuser.me
+// are accepted, so javascript:/data: payloads and tracking pixels never reach the database. The
+// normalized href is what gets stored: the parser forgives things (surrounding spaces) the check
+// should not pass through verbatim.
 const pictureUrl = z
   .string()
   .max(URL_MAX_LENGTH)
-  .refine((value) => {
-    if (!URL.canParse(value)) return false;
-    const url = new URL(value);
-    return url.protocol === SECURE_URL_PROTOCOL && url.hostname === PICTURE_HOST;
-  }, `Must be an https URL on ${PICTURE_HOST}`);
+  .refine((value) => !FORBIDDEN_TEXT_PATTERN.test(value) && URL.canParse(value), 'Must be a valid URL')
+  .transform((value) => new URL(value))
+  .refine(
+    (url) =>
+      url.protocol === SECURE_URL_PROTOCOL &&
+      url.hostname === PICTURE_HOST &&
+      url.port === '' &&
+      url.username === '' &&
+      url.password === '',
+    `Must be an https URL on ${PICTURE_HOST}`,
+  )
+  .transform((url) => url.href);
 
 /** Today's calendar date in the furthest-ahead timezone, so no real birthday is "in the future". */
 const latestCalendarDate = () => new Date(Date.now() + LATEST_TIMEZONE_OFFSET_MS).toISOString().slice(0, 10);

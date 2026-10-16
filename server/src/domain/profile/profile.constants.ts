@@ -1,4 +1,4 @@
-/** Honorifics a profile may carry. A closed set, so the database can enforce it too (migration 3). */
+/** Honorifics a profile may carry. A closed set, so the database can enforce it too (migration 1). */
 export enum Title {
   Mr = 'Mr',
   Mrs = 'Mrs',

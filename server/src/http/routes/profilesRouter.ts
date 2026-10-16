@@ -17,7 +17,13 @@ const idListSchema = z
 /** Either a page of the list (?limit=&cursor=) or a lookup of specific profiles (?ids=a,b,c). */
 const listQuerySchema = z
   .object({
-    limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).optional(),
+    // Digits only: Number() would also accept "0x10" or "1e1".
+    limit: z
+      .string()
+      .regex(/^\d+$/, 'limit must be a whole number')
+      .transform(Number)
+      .pipe(z.number().min(1).max(MAX_PAGE_SIZE))
+      .optional(),
     cursor: cursorParamSchema.optional(),
     ids: idListSchema.optional(),
   })

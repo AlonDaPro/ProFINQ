@@ -122,6 +122,11 @@ describe('POST /api/profiles', () => {
 });
 
 describe('GET /api/profiles/:id', () => {
+  it('answers a path that is not valid percent-encoding with 400, not 500', async () => {
+    const response = await request(app).get('/api/profiles/%E0%A4%A').expect(400);
+    expect(response.body.error.code).toBe('INVALID_REQUEST');
+  });
+
   it('returns 404 for an unknown profile', async () => {
     const response = await request(app).get('/api/profiles/does-not-exist').expect(404);
 
@@ -201,8 +206,14 @@ describe('GET /api/profiles (pagination)', () => {
     ['a limit above the cap', { limit: '101' }],
     ['a zero limit', { limit: '0' }],
     ['a non-numeric limit', { limit: 'ten' }],
+    ['a hexadecimal limit', { limit: '0x10' }],
+    ['an exponent limit', { limit: '1e1' }],
     ['a tampered cursor', { cursor: 'not-a-cursor' }],
     ['a cursor with a forged payload', { cursor: Buffer.from('{"savedAt":"x","id":"y"}').toString('base64url') }],
+    [
+      'a well-formed cursor whose instant Postgres cannot store',
+      { cursor: Buffer.from('{"savedAt":"0000-01-01T00:00:00Z","id":"a"}').toString('base64url') },
+    ],
     ['an unknown parameter', { sort: 'name' }],
   ])('rejects %s with 400', async (_label, query) => {
     const response = await request(app).get('/api/profiles').query(query).expect(400);

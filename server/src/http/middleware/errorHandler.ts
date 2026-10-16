@@ -1,6 +1,6 @@
 import type { ErrorRequestHandler } from 'express';
 import { ErrorCode } from '../../constants/errorCode.js';
-import { HttpStatus } from '../../constants/httpStatus.js';
+import { CLIENT_ERROR_STATUS_RANGE, HttpStatus } from '../../constants/httpStatus.js';
 import { isDatabaseUnavailableError } from '../../db/pool.js';
 import { DomainError, type DomainErrorCode } from '../../domain/errors.js';
 import type { Logger } from '../../logger.js';
@@ -51,15 +51,22 @@ const BODY_PARSER_ERRORS: ReadonlyMap<string, HttpErrorResponse> = new Map([
   ],
 ]);
 
-function bodyParserError(error: unknown): HttpErrorResponse | undefined {
-  if (!(error instanceof Error) || !('type' in error) || typeof error.type !== 'string') return undefined;
-  const known = BODY_PARSER_ERRORS.get(error.type);
-  if (known) return known;
-  // Any other body-parser rejection (e.g. an aborted upload) is the client's fault, not a 500.
-  const isClientError = 'expose' in error && error.expose === true;
-  return isClientError
-    ? { status: HttpStatus.BadRequest, body: errorBody(ErrorCode.InvalidRequest, error.message) }
-    : undefined;
+function bodyParserError(error: Error): HttpErrorResponse | undefined {
+  return 'type' in error && typeof error.type === 'string' ? BODY_PARSER_ERRORS.get(error.type) : undefined;
+}
+
+/**
+ * Express and body-parser tag the bad requests they reject themselves (an aborted upload, a path
+ * that is not valid percent-encoding) with a 4xx `status`; our own code never sets one. `expose`
+ * marks the message as safe to echo.
+ */
+function frameworkClientError(error: Error): HttpErrorResponse | undefined {
+  const status = 'status' in error && typeof error.status === 'number' ? error.status : undefined;
+  if (status === undefined || status < CLIENT_ERROR_STATUS_RANGE.min || status > CLIENT_ERROR_STATUS_RANGE.max) {
+    return undefined;
+  }
+  const message = 'expose' in error && error.expose === true ? error.message : 'Invalid request';
+  return { status: HttpStatus.BadRequest, body: errorBody(ErrorCode.InvalidRequest, message) };
 }
 
 function toHttpError(error: unknown): HttpErrorResponse | undefined {
@@ -76,8 +83,9 @@ function toHttpError(error: unknown): HttpErrorResponse | undefined {
   if (error instanceof DomainError) {
     return { status: DOMAIN_ERROR_STATUS[error.code], body: errorBody(error.code, error.message) };
   }
-  const parserError = bodyParserError(error);
-  if (parserError) return parserError;
+  if (!(error instanceof Error)) return undefined;
+  const clientError = bodyParserError(error) ?? frameworkClientError(error);
+  if (clientError) return clientError;
   if (isDatabaseUnavailableError(error)) {
     return {
       status: HttpStatus.ServiceUnavailable,

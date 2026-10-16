@@ -1,10 +1,15 @@
 import { z } from 'zod';
+import { MAX_CURSOR_LENGTH } from '../constants/api.js';
 import type { PageCursor } from '../domain/pagination.js';
 import { profileIdSchema } from '../domain/profile/index.js';
 
 const cursorPayloadSchema = z
   .object({
-    savedAt: z.string().datetime({ offset: true }),
+    // A well-formed but out-of-range instant (year 0000) would otherwise reach Postgres and fail there.
+    savedAt: z
+      .string()
+      .datetime({ offset: true })
+      .refine((value) => Date.parse(value) >= 0),
     id: profileIdSchema,
   })
   .strict();
@@ -25,7 +30,7 @@ function decodeCursor(value: string): unknown {
 /** A cursor is user input like any other: decoded, then validated. */
 export const cursorParamSchema = z
   .string()
-  .max(512)
+  .max(MAX_CURSOR_LENGTH)
   .transform((value, context) => {
     const parsed = cursorPayloadSchema.safeParse(decodeCursor(value));
     if (!parsed.success) {
