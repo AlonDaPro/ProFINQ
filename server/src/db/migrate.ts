@@ -12,6 +12,8 @@ export async function runMigrations(
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // The pool's 10 s statement timeout must not kill a replica waiting for the lock or a long DDL.
+    await client.query('SET LOCAL statement_timeout = 0');
     await client.query('SELECT pg_advisory_xact_lock($1)', [MIGRATION_LOCK_KEY]);
     await client.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (

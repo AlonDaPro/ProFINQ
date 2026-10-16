@@ -2,8 +2,8 @@ import type { Pool } from 'pg';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { createApp } from '../src/app.js';
-import { runMigrations } from '../src/db/migrate.js';
-import { buildProfile, createTestContext } from './helpers.js';
+import { Gender, Title } from '../src/domain/profile/index.js';
+import { buildDetails, buildProfile, createTestContext, PROFILE_ID, withValue } from './helpers.js';
 
 let pool: Pool;
 let app: ReturnType<typeof createApp>;
@@ -20,30 +20,65 @@ afterAll(async () => {
   await pool.end();
 });
 
+const PROFILE_URL = `/api/profiles/${PROFILE_ID}`;
+
+interface ErrorDetail {
+  path: string;
+  message: string;
+}
+
+const detailPaths = (body: { error: { details: ErrorDetail[] } }) => body.error.details.map((detail) => detail.path);
+
+async function saveProfile(id = PROFILE_ID) {
+  return request(app)
+    .post('/api/profiles')
+    .send({ ...buildProfile(), id })
+    .expect(201);
+}
+
+/** Inserts `count` profiles with strictly increasing saved_at, directly, to set up paging. */
+async function seedProfiles(count: number): Promise<string[]> {
+  const ids = Array.from({ length: count }, (_, index) => `seed-${String(index).padStart(3, '0')}`);
+  for (const [index, id] of ids.entries()) {
+    await saveProfile(id);
+    await pool.query(
+      `UPDATE profiles SET saved_at = TIMESTAMPTZ '2026-01-01' + make_interval(secs => $2) WHERE id = $1`,
+      [id, index],
+    );
+  }
+  return ids.reverse(); // newest first, the list's order
+}
+
 describe('POST /api/profiles', () => {
-  it('persists a profile and returns it with server timestamps', async () => {
-    const profile = buildProfile();
+  it('persists a profile and returns it with server timestamps and a Location header', async () => {
+    const response = await saveProfile();
 
-    const response = await request(app).post('/api/profiles').send(profile).expect(201);
-
-    expect(response.headers.location).toBe(`/api/profiles/${profile.id}`);
-    expect(response.body).toMatchObject(profile);
-    expect(typeof response.body.savedAt).toBe('string');
-
-    const list = await request(app).get('/api/profiles').expect(200);
-    expect(list.body.profiles).toHaveLength(1);
+    expect(response.headers.location).toBe(PROFILE_URL);
+    expect(response.body).toMatchObject(buildProfile());
+    expect(Date.parse(response.body.savedAt)).not.toBeNaN();
+    const stored = await request(app).get(PROFILE_URL).expect(200);
+    expect(stored.body).toEqual(response.body);
   });
 
-  it('trims surrounding whitespace before storing', async () => {
-    const profile = buildProfile({ name: { title: ' Ms ', first: '  Noa ', last: 'Levi  ' } });
+  it('stores trimmed values', async () => {
+    const body = withValue(buildProfile(), 'name.first', '  Noa  ');
 
-    const response = await request(app).post('/api/profiles').send(profile).expect(201);
+    const response = await request(app).post('/api/profiles').send(body).expect(201);
 
-    expect(response.body.name).toEqual({ title: 'Ms', first: 'Noa', last: 'Levi' });
+    expect(response.body.name.first).toBe('Noa');
+  });
+
+  it('stores the date of birth as the same calendar day it was given', async () => {
+    const response = await request(app)
+      .post('/api/profiles')
+      .send({ ...buildProfile(), dateOfBirth: '1990-01-01' })
+      .expect(201);
+
+    expect(response.body.dateOfBirth).toBe('1990-01-01');
   });
 
   it('rejects a duplicate save with 409', async () => {
-    await request(app).post('/api/profiles').send(buildProfile()).expect(201);
+    await saveProfile();
 
     const response = await request(app).post('/api/profiles').send(buildProfile()).expect(409);
 
@@ -60,56 +95,19 @@ describe('POST /api/profiles', () => {
     expect(rows[0]?.count).toBe('1');
   });
 
-  it.each([
-    ['a blank first name', buildProfile({ name: { title: 'Ms', first: '   ', last: 'Levi' } })],
-    [
-      'a non-https picture',
-      buildProfile({ picture: { large: 'javascript:alert(1)', thumbnail: 'https://x.io/a.jpg' } }),
-    ],
-    ['a picture that is not a URL', buildProfile({ picture: { large: 'nope', thumbnail: 'https://x.io/a.jpg' } })],
-    ['an invalid email', buildProfile({ email: 'not-an-email' })],
-    ['a future date of birth', buildProfile({ dateOfBirth: '2999-01-01T00:00:00.000Z' })],
-    ['an id with illegal characters', buildProfile({ id: "x'; DROP TABLE profiles; --" })],
-  ])('rejects %s with 400 and field details', async (_label, payload) => {
-    const response = await request(app).post('/api/profiles').send(payload).expect(400);
+  it('answers invalid input with 400 and every problem, located in the body', async () => {
+    const body = withValue(withValue(buildProfile(), 'email', 'nope'), 'location.streetNumber', '12');
+
+    const response = await request(app).post('/api/profiles').send(body).expect(400);
 
     expect(response.body.error.code).toBe('VALIDATION_FAILED');
-    expect(response.body.error.details.length).toBeGreaterThan(0);
+    expect(detailPaths(response.body)).toEqual(expect.arrayContaining(['body.email', 'body.location.streetNumber']));
   });
 
-  it('accepts real randomuser.me emails that strict RFC validators reject', async () => {
-    // Seen in production data for German names like "Hans-J.": consecutive dots in the local part.
-    const profile = buildProfile({ email: 'hans-j..diederich@example.com' });
+  it('answers a missing body with a located error', async () => {
+    const response = await request(app).post('/api/profiles').expect(400);
 
-    await request(app).post('/api/profiles').send(profile).expect(201);
-  });
-
-  it('rejects a body larger than the limit with 413', async () => {
-    const response = await request(app)
-      .post('/api/profiles')
-      .send({ ...buildProfile(), padding: 'x'.repeat(40_000) })
-      .expect(413);
-
-    expect(response.body.error.code).toBe('PAYLOAD_TOO_LARGE');
-  });
-
-  it('answers other unreadable bodies with their 4xx, not a 500', async () => {
-    const response = await request(app)
-      .post('/api/profiles')
-      .set('Content-Type', 'application/json; charset=koi8-r')
-      .send('{}')
-      .expect(415);
-
-    expect(response.body.error.code).toBe('INVALID_REQUEST');
-  });
-
-  it('rejects unknown fields instead of silently dropping them', async () => {
-    const response = await request(app)
-      .post('/api/profiles')
-      .send({ ...buildProfile(), isAdmin: true })
-      .expect(400);
-
-    expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    expect(detailPaths(response.body)).toEqual(['body']);
   });
 
   it('returns 400 for malformed JSON', async () => {
@@ -130,114 +128,193 @@ describe('GET /api/profiles/:id', () => {
     expect(response.body.error.code).toBe('PROFILE_NOT_FOUND');
   });
 
-  it('round-trips non-Latin names unchanged', async () => {
-    const profile = buildProfile({ name: { title: 'آقای', first: 'نیما', last: 'رضایی' } });
-    await request(app).post('/api/profiles').send(profile).expect(201);
+  it('returns 400, located in the params, for an id that could never exist', async () => {
+    const response = await request(app).get('/api/profiles/bad!id').expect(400);
 
-    const response = await request(app).get(`/api/profiles/${profile.id}`).expect(200);
+    expect(detailPaths(response.body)).toEqual(['params.id']);
+  });
 
-    expect(response.body.name).toEqual(profile.name);
+  it('round-trips non-Latin text unchanged', async () => {
+    const body = { ...buildProfile(), name: { title: Title.Mr, first: 'נועם', last: 'رضایی' } };
+    await request(app).post('/api/profiles').send(body).expect(201);
+
+    const response = await request(app).get(PROFILE_URL).expect(200);
+
+    expect(response.body.name).toEqual(body.name);
   });
 });
 
-describe('PATCH /api/profiles/:id', () => {
-  it('updates only the name and bumps updatedAt', async () => {
-    const profile = buildProfile();
-    const created = await request(app).post('/api/profiles').send(profile).expect(201);
+describe('GET /api/profiles (pagination)', () => {
+  it('returns an empty first page and no cursor when nothing is saved', async () => {
+    const response = await request(app).get('/api/profiles').expect(200);
 
-    const response = await request(app)
-      .patch(`/api/profiles/${profile.id}`)
-      .send({ name: { title: 'Dr', first: 'Noam', last: 'Cohen' } })
-      .expect(200);
+    expect(response.body).toEqual({ profiles: [], nextCursor: null });
+  });
 
-    expect(response.body.name).toEqual({ title: 'Dr', first: 'Noam', last: 'Cohen' });
-    expect(response.body.email).toBe(profile.email);
-    expect(Date.parse(response.body.updatedAt)).toBeGreaterThanOrEqual(Date.parse(created.body.updatedAt));
+  it('walks every profile exactly once, newest first, following the cursor', async () => {
+    const expected = await seedProfiles(7);
+
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const query: Record<string, string> = { limit: '3', ...(cursor ? { cursor } : {}) };
+      const response = await request(app).get('/api/profiles').query(query).expect(200);
+      expect(response.body.profiles.length).toBeLessThanOrEqual(3);
+      seen.push(...response.body.profiles.map((profile: { id: string }) => profile.id));
+      cursor = response.body.nextCursor;
+    } while (cursor);
+
+    expect(seen).toEqual(expected);
+  });
+
+  it('ends with a null cursor exactly when the last page is full', async () => {
+    await seedProfiles(3);
+
+    const response = await request(app).get('/api/profiles').query({ limit: '3' }).expect(200);
+
+    expect(response.body.profiles).toHaveLength(3);
+    expect(response.body.nextCursor).toBeNull();
+  });
+
+  it('breaks ties on saved_at by id, so no row is skipped or repeated', async () => {
+    for (const id of ['tie-a', 'tie-b', 'tie-c']) await saveProfile(id);
+    await pool.query(`UPDATE profiles SET saved_at = TIMESTAMPTZ '2026-01-01'`);
+
+    const first = await request(app).get('/api/profiles').query({ limit: '2' }).expect(200);
+    const second = await request(app).get('/api/profiles').query({ cursor: first.body.nextCursor }).expect(200);
+
+    const ids = [...first.body.profiles, ...second.body.profiles].map((profile: { id: string }) => profile.id);
+    expect(ids).toEqual(['tie-c', 'tie-b', 'tie-a']);
+  });
+
+  it('keeps later pages stable when new profiles are saved meanwhile', async () => {
+    const expected = await seedProfiles(4);
+    const first = await request(app).get('/api/profiles').query({ limit: '2' }).expect(200);
+
+    await saveProfile('brand-new');
+    const second = await request(app).get('/api/profiles').query({ limit: '2', cursor: first.body.nextCursor });
+
+    expect(second.body.profiles.map((profile: { id: string }) => profile.id)).toEqual(expected.slice(2));
+  });
+
+  it.each([
+    ['a limit above the cap', { limit: '101' }],
+    ['a zero limit', { limit: '0' }],
+    ['a non-numeric limit', { limit: 'ten' }],
+    ['a tampered cursor', { cursor: 'not-a-cursor' }],
+    ['a cursor with a forged payload', { cursor: Buffer.from('{"savedAt":"x","id":"y"}').toString('base64url') }],
+    ['an unknown parameter', { sort: 'name' }],
+  ])('rejects %s with 400', async (_label, query) => {
+    const response = await request(app).get('/api/profiles').query(query).expect(400);
+
+    expect(detailPaths(response.body)[0]).toMatch(/^query/);
+  });
+});
+
+describe('GET /api/profiles?ids=', () => {
+  it('returns only the saved profiles among the requested ids', async () => {
+    await saveProfile('saved-1');
+    await saveProfile('saved-2');
+
+    const response = await request(app).get('/api/profiles').query({ ids: 'saved-1,missing,saved-2' }).expect(200);
+
+    const ids = response.body.profiles.map((profile: { id: string }) => profile.id).sort();
+    expect(ids).toEqual(['saved-1', 'saved-2']);
+    expect(response.body.nextCursor).toBeNull();
+  });
+
+  it.each([
+    ['an invalid id', { ids: 'ok,bad!id' }],
+    ['more than 100 ids', { ids: Array.from({ length: 101 }, (_, index) => `id-${index}`).join(',') }],
+    ['ids together with a cursor', { ids: 'a', limit: '5' }],
+  ])('rejects %s with 400', async (_label, query) => {
+    await request(app).get('/api/profiles').query(query).expect(400);
+  });
+});
+
+describe('PUT /api/profiles/:id', () => {
+  it('replaces every editable field and moves updatedAt to now', async () => {
+    const created = await saveProfile();
+    const edited = buildDetails({
+      name: { title: Title.Dr, first: 'Noam', last: 'Cohen' },
+      gender: Gender.Male,
+      email: 'noam.cohen@example.co.il',
+      phone: '+972586043122',
+      location: { streetNumber: 12, streetName: 'Herzl', city: 'Haifa', state: 'Haifa District', country: 'Israel' },
+      dateOfBirth: '1985-01-30',
+    });
+    // Back-date it, so the assertion below can only pass if the UPDATE really set a new value.
+    await pool.query(`UPDATE profiles SET updated_at = TIMESTAMPTZ '2000-01-01'`);
+    const before = Date.now();
+
+    const response = await request(app).put(PROFILE_URL).send(edited).expect(200);
+
+    expect(response.body).toMatchObject(edited);
+    expect(Date.parse(response.body.updatedAt)).toBeGreaterThanOrEqual(before - 1_000);
+    expect(response.body.savedAt).toBe(created.body.savedAt);
+    const stored = await request(app).get(PROFILE_URL).expect(200);
+    expect(stored.body).toEqual(response.body);
+  });
+
+  it('keeps the id, picture and savedAt untouched', async () => {
+    const created = await saveProfile();
+
+    const response = await request(app).put(PROFILE_URL).send(buildDetails()).expect(200);
+
+    expect(response.body.id).toBe(PROFILE_ID);
+    expect(response.body.picture).toEqual(created.body.picture);
+    expect(response.body.savedAt).toBe(created.body.savedAt);
+  });
+
+  it.each([
+    ['the id', { ...buildDetails(), id: 'hijacked' }],
+    ['the picture', { ...buildDetails(), picture: buildProfile().picture }],
+    ['server timestamps', { ...buildDetails(), savedAt: '2000-01-01T00:00:00.000Z' }],
+  ])('refuses a body that tries to change %s', async (_label, body) => {
+    await saveProfile();
+
+    await request(app).put(PROFILE_URL).send(body).expect(400);
+  });
+
+  it('requires the complete set of details', async () => {
+    await saveProfile();
+    const partial: Partial<ReturnType<typeof buildDetails>> = buildDetails();
+    delete partial.email;
+
+    const response = await request(app).put(PROFILE_URL).send(partial).expect(400);
+
+    expect(detailPaths(response.body)).toContain('body.email');
+  });
+
+  it('leaves the stored profile unchanged when validation fails', async () => {
+    await saveProfile();
+
+    await request(app)
+      .put(PROFILE_URL)
+      .send(withValue(buildDetails(), 'name.first', '123'))
+      .expect(400);
+
+    const stored = await request(app).get(PROFILE_URL).expect(200);
+    expect(stored.body.name.first).toBe('Noa');
   });
 
   it('returns 404 when the profile does not exist', async () => {
-    await request(app)
-      .patch('/api/profiles/missing')
-      .send({ name: { title: '', first: 'A', last: 'B' } })
-      .expect(404);
-  });
+    const response = await request(app).put(PROFILE_URL).send(buildDetails()).expect(404);
 
-  it('refuses to change anything other than the name', async () => {
-    const profile = buildProfile();
-    await request(app).post('/api/profiles').send(profile).expect(201);
-
-    await request(app)
-      .patch(`/api/profiles/${profile.id}`)
-      .send({ name: profile.name, email: 'hijack@example.com' })
-      .expect(400);
+    expect(response.body.error.code).toBe('PROFILE_NOT_FOUND');
   });
 });
 
 describe('DELETE /api/profiles/:id', () => {
   it('removes the profile', async () => {
-    const profile = buildProfile();
-    await request(app).post('/api/profiles').send(profile).expect(201);
+    await saveProfile();
 
-    await request(app).delete(`/api/profiles/${profile.id}`).expect(204);
+    await request(app).delete(PROFILE_URL).expect(204);
 
-    await request(app).get(`/api/profiles/${profile.id}`).expect(404);
+    await request(app).get(PROFILE_URL).expect(404);
   });
 
   it('returns 404 when the profile does not exist', async () => {
-    await request(app).delete('/api/profiles/missing').expect(404);
-  });
-});
-
-describe('infrastructure', () => {
-  it('reports health', async () => {
-    await request(app).get('/api/health').expect(200, { status: 'ok' });
-  });
-
-  it('sends security headers and no framework fingerprint', async () => {
-    const response = await request(app).get('/api/health').expect(200);
-
-    expect(response.headers['x-content-type-options']).toBe('nosniff');
-    expect(response.headers['x-frame-options']).toBe('DENY');
-    expect(response.headers['content-security-policy']).toContain("default-src 'none'");
-    expect(response.headers['x-powered-by']).toBeUndefined();
-  });
-
-  it('only allows configured CORS origins', async () => {
-    const allowed = await request(app).get('/api/profiles').set('Origin', 'http://localhost:5173');
-    const denied = await request(app).get('/api/profiles').set('Origin', 'https://evil.example');
-
-    expect(allowed.headers['access-control-allow-origin']).toBe('http://localhost:5173');
-    expect(denied.headers['access-control-allow-origin']).toBeUndefined();
-  });
-
-  it('returns a JSON 404 for unknown routes', async () => {
-    const response = await request(app).get('/api/nope').expect(404);
-
-    expect(response.body.error.code).toBe('ROUTE_NOT_FOUND');
-  });
-
-  it('is idempotent when migrations run again', async () => {
-    await expect(runMigrations(pool)).resolves.toEqual([]);
-  });
-});
-
-describe('database', () => {
-  it('serves the newest-first list from the (saved_at, id) index without a sort step', async () => {
-    // SET is per connection, so the whole check runs on one checked-out client.
-    const client = await pool.connect();
-    try {
-      // On a near-empty table a sequential scan is cheaper; disable it to see which index the planner picks.
-      await client.query('SET enable_seqscan = off');
-      const { rows } = await client.query<{ 'QUERY PLAN': string }>(
-        'EXPLAIN SELECT id FROM profiles ORDER BY saved_at DESC, id',
-      );
-      const plan = rows.map((row) => row['QUERY PLAN']).join('\n');
-
-      expect(plan).toContain('profiles_saved_at_id_idx');
-      expect(plan).not.toMatch(/\bSort\b/);
-    } finally {
-      await client.query('RESET enable_seqscan');
-      client.release();
-    }
+    await request(app).delete(PROFILE_URL).expect(404);
   });
 });

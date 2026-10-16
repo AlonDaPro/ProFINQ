@@ -20,8 +20,12 @@ enum ExitCode {
 
 async function main(): Promise<void> {
   const config = loadConfig();
-  const pool = createPool(config.DATABASE_URL, (error) => {
-    logger.error('Idle PostgreSQL client error', error);
+  const pool = createPool({
+    connectionString: config.DATABASE_URL,
+    maxConnections: config.DB_POOL_SIZE,
+    onIdleClientError: (error) => {
+      logger.error('Idle PostgreSQL client error', error);
+    },
   });
 
   await waitForDatabase(pool, DATABASE_STARTUP_RETRY);
@@ -34,11 +38,16 @@ async function main(): Promise<void> {
     profileService: new ProfileService(new PostgresProfileRepository(pool)),
     checkDatabaseHealth: () => checkDatabaseHealth(pool),
     corsOrigins: config.CORS_ORIGINS,
+    rateLimits: {
+      readsPerMinute: config.RATE_LIMIT_READS_PER_MINUTE,
+      writesPerMinute: config.RATE_LIMIT_WRITES_PER_MINUTE,
+    },
+    trustProxyHops: config.TRUST_PROXY_HOPS,
     logger,
   });
 
   const server = app.listen(config.PORT, () => {
-    logger.info(`Profinq API listening on http://localhost:${config.PORT}`);
+    logger.info('Profinq API listening', { address: server.address() });
   });
 
   let shuttingDown = false;

@@ -3,6 +3,7 @@ import express, { type Express } from 'express';
 import { ApiPath, CORS_PREFLIGHT_MAX_AGE_SECONDS, REQUEST_BODY_LIMIT } from './constants/api.js';
 import { createErrorHandler } from './http/middleware/errorHandler.js';
 import { notFoundHandler } from './http/middleware/notFoundHandler.js';
+import { createRateLimiters, type RateLimits } from './http/middleware/rateLimit.js';
 import { securityHeaders } from './http/middleware/securityHeaders.js';
 import { createHealthRouter } from './http/routes/healthRouter.js';
 import { createProfilesRouter } from './http/routes/profilesRouter.js';
@@ -13,19 +14,25 @@ export interface AppDependencies {
   profileService: ProfileService;
   checkDatabaseHealth: () => Promise<void>;
   corsOrigins: readonly string[];
+  rateLimits: RateLimits;
+  /** Proxy hops in front of the app; makes req.ip (and so rate limiting) see the real client. */
+  trustProxyHops: number;
   logger: Logger;
 }
 
-export function createApp({ profileService, checkDatabaseHealth, corsOrigins, logger }: AppDependencies): Express {
+export function createApp(dependencies: AppDependencies): Express {
+  const { profileService, checkDatabaseHealth, corsOrigins, rateLimits, trustProxyHops, logger } = dependencies;
   const app = express();
 
   app.disable('x-powered-by');
+  app.set('trust proxy', trustProxyHops);
   app.use(securityHeaders);
   app.use(cors({ origin: [...corsOrigins], maxAge: CORS_PREFLIGHT_MAX_AGE_SECONDS }));
   app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
 
+  // Health checks stay unlimited, so a load balancer probing often is never throttled.
   app.use(ApiPath.Health, createHealthRouter(checkDatabaseHealth, logger));
-  app.use(ApiPath.Profiles, createProfilesRouter(profileService));
+  app.use(ApiPath.Profiles, ...createRateLimiters(rateLimits), createProfilesRouter(profileService));
   app.use(notFoundHandler);
   app.use(createErrorHandler(logger));
 

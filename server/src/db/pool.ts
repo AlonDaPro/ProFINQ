@@ -1,6 +1,9 @@
 import pg from 'pg';
 
-const POOL_MAX_CONNECTIONS = 10;
+// Return DATE columns as 'YYYY-MM-DD' strings. The default parser builds a Date at local
+// midnight, which shifts a birthday by a day in any timezone west of UTC.
+pg.types.setTypeParser(pg.types.builtins.DATE, (value) => value);
+
 const CONNECTION_TIMEOUT_MS = 5_000;
 const IDLE_TIMEOUT_MS = 30_000;
 /** A runaway query is killed by Postgres instead of holding a pooled connection forever. */
@@ -29,10 +32,16 @@ export interface RetryOptions {
   delayMs: number;
 }
 
-export function createPool(connectionString: string, onIdleClientError: (error: Error) => void): pg.Pool {
+export interface PoolOptions {
+  connectionString: string;
+  maxConnections: number;
+  onIdleClientError: (error: Error) => void;
+}
+
+export function createPool({ connectionString, maxConnections, onIdleClientError }: PoolOptions): pg.Pool {
   const pool = new pg.Pool({
     connectionString,
-    max: POOL_MAX_CONNECTIONS,
+    max: maxConnections,
     connectionTimeoutMillis: CONNECTION_TIMEOUT_MS,
     idleTimeoutMillis: IDLE_TIMEOUT_MS,
     statement_timeout: STATEMENT_TIMEOUT_MS,
@@ -53,6 +62,8 @@ export async function waitForDatabase(pool: pg.Pool, { attempts, delayMs }: Retr
       await checkDatabaseHealth(pool);
       return;
     } catch (error) {
+      // Only an outage is worth waiting out; a wrong password or a missing database never heals.
+      if (!isDatabaseUnavailableError(error)) throw error;
       if (attempt >= attempts) {
         throw new Error(`Database is unreachable after ${attempts} attempts`, { cause: error });
       }

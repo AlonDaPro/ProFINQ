@@ -7,6 +7,7 @@ export enum ErrorCode {
   ProfileNotFound = 'PROFILE_NOT_FOUND',
   ProfileAlreadyExists = 'PROFILE_ALREADY_EXISTS',
   RouteNotFound = 'ROUTE_NOT_FOUND',
+  TooManyRequests = 'TOO_MANY_REQUESTS',
   ServiceUnavailable = 'SERVICE_UNAVAILABLE',
   InternalError = 'INTERNAL_ERROR',
 }

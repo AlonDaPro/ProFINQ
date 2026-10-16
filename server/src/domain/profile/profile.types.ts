@@ -1,7 +1,8 @@
 import type { z } from 'zod';
-import type { profileNameSchema, profileSchema } from './profile.schema.js';
+import type { profileDetailsSchema, profileSchema } from './profile.schema.js';
 
-export type ProfileName = z.infer<typeof profileNameSchema>;
+/** The editable part of a profile. */
+export type ProfileDetails = z.infer<typeof profileDetailsSchema>;
 export type Profile = z.infer<typeof profileSchema>;
 
 export interface SavedProfile extends Profile {
