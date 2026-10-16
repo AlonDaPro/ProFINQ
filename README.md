@@ -88,9 +88,9 @@ Every package has an `npm run check`: the type checker and Prettier everywhere, 
 
 | Where     | Command         | Covers                                                                              |
 | --------- | --------------- | ----------------------------------------------------------------------------------- |
-| `server/` | `npm run check` | 173 tests: API, validation, pagination and query plans on a real PostgreSQL         |
-| `client/` | `npm run check` | 158 unit and component tests (form rules, stores, API adapters, the profile screen) |
-| `e2e/`    | `npm test`      | 50 Playwright runs on production builds, desktop and mobile, with axe               |
+| `server/` | `npm run check` | 190 tests: API, filters, validation, pagination and query plans on real PostgreSQL  |
+| `client/` | `npm run check` | 179 unit and component tests (form rules, stores, API adapters, the profile screen) |
+| `e2e/`    | `npm test`      | 51 Playwright runs on production builds, desktop and mobile, with axe               |
 
 GitHub Actions runs all three on every push to `main` and every pull request ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
