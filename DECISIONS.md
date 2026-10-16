@@ -36,10 +36,10 @@ Only Screen 3 is `<article dir="rtl" lang="he">`; layout uses logical CSS proper
 ## Corners cut deliberately
 
 - Fetch replaces the batch, so unsaved edits to the previous one are lost → keep it in `sessionStorage`.
-- No deployment → Render + Neon, with E2E against the preview URL.
+- Two tabs editing one profile: the last Update wins → an `updated_at` precondition and a 409.
+- On Vercel the rate limit counts per function instance → a shared store (Redis) or the Vercel Firewall.
 - The API contract is duplicated as zod schemas on both sides → a shared package.
-- The extension took longer than 30 minutes.
 
 ## Extension: critical-path tests in a real browser
 
-Playwright runs the whole journey against production builds on real Postgres, in CI: Fetch → filter → edit every field → Save → History → Update → Delete, plus validation errors, server rejections, pagination, BiDi directions, keyboard-only use and an axe WCAG 2.1 AA scan, on desktop and mobile. I chose tests because the spec's implicit rules break silently. They caught real bugs, such as Enter not submitting the form.
+Playwright runs the whole journey against production builds on real Postgres, in CI: Fetch → filter → edit every field → Save → History → Update → Delete, plus validation errors, server rejections, pagination, BiDi directions, keyboard-only use and an axe WCAG 2.1 AA scan, on desktop and mobile. I chose tests because the spec's implicit rules break silently. They caught real bugs, such as Enter not submitting the form. It took longer than the suggested 30 minutes.

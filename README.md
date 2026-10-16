@@ -6,9 +6,11 @@
 </p>
 
 <p align="center">
-  Meet ten random people, fix their names, and keep the ones you like.<br />
+  Meet ten random people, edit their details, and keep the ones you like.<br />
   A Vue 3 client and a Node + TypeScript API backed by PostgreSQL.
 </p>
+
+<p align="center"><strong>Live demo: <a href="https://profinq-vot1-henna.vercel.app/">profinq-vot1-henna.vercel.app</a></strong></p>
 
 <p align="center">
   <img src="docs/screenshots/home.webp" alt="Profinq home screen" width="32%" />
