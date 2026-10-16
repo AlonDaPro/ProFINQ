@@ -1,5 +1,8 @@
+import { Gender } from '@/domain/profile';
+
 /** English copy for every screen except the profile detail (see he.ts). */
 export const en = {
+  genders: { [Gender.Male]: 'Male', [Gender.Female]: 'Female' } satisfies Record<Gender, string>,
   pageTitles: { profile: 'Profile' },
   nav: { label: 'Main', random: 'Random', history: 'History', skipToContent: 'Skip to content' },
   home: {
@@ -65,21 +68,4 @@ export const en = {
     allCountries: 'All countries',
   },
   notFound: { title: 'Page not found', body: 'That address does not match any page.', home: 'Go home' },
-  validation: {
-    required: 'Required',
-    tooLong: (max: number) => `Up to ${max} characters`,
-    invalidTitle: 'Choose a valid title',
-    invalidName: 'Name contains invalid characters',
-  },
-  titleOptions: {
-    mr: 'Mr',
-    mrs: 'Mrs',
-    ms: 'Ms',
-    miss: 'Miss',
-    dr: 'Dr',
-    master: 'Master',
-    rev: 'Rev',
-    sir: 'Sir',
-    mx: 'Mx',
-  },
 } as const;

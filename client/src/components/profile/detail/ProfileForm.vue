@@ -19,6 +19,7 @@ import {
   Title,
 } from '@/domain/profile';
 import { he } from '@/i18n/he';
+import type { FieldMessage } from '@/types/fieldMessage';
 
 const props = defineProps<{
   formId: string;
@@ -34,10 +35,10 @@ const GENDERS = Object.values(Gender);
 const TITLES = Object.values(Title);
 const LATEST_DATE_OF_BIRTH = latestCalendarDate();
 
-function errorText(field: Field): string | null {
+function errorText(field: Field): FieldMessage | null {
   const error = props.errors[field];
   if (!error) return null;
-  return error.serverMessage ?? he.errors[error.code](FIELD_MAX_LENGTH[field]);
+  return { text: he.errors[error.code](FIELD_MAX_LENGTH[field]), detail: error.serverMessage };
 }
 
 /** Age and birth year follow the date being typed, but only once it is a real date. */

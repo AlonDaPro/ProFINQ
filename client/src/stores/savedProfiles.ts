@@ -39,10 +39,50 @@ export const useSavedProfilesStore = defineStore('savedProfiles', () => {
   const hasMore = computed(() => nextCursor.value !== null);
 
   let pendingLoad: Promise<void> | null = null;
+  /** Bumped by every confirmed save, update or delete. */
   let mutationVersion = 0;
+  /** The mutationVersion of the last change to each id, so an older answer cannot undo it. */
+  const mutatedAt = new Map<string, number>();
+  /** Bumped whenever the list is replaced, so a "Show more" page for the old list is dropped. */
+  let listGeneration = 0;
+
+  function markMutated(id: string): void {
+    mutationVersion += 1;
+    mutatedAt.set(id, mutationVersion);
+  }
+
+  function changedSince(id: string, version: number): boolean {
+    return (mutatedAt.get(id) ?? 0) > version;
+  }
 
   function remember(profile: SavedProfile): void {
     byId.value.set(profile.id, profile);
+  }
+
+  /** Newest first, like the server: by savedAt, then id. */
+  function isOlder(a: SavedProfile, b: SavedProfile): boolean {
+    return a.savedAt < b.savedAt || (a.savedAt === b.savedAt && a.id < b.id);
+  }
+
+  /**
+   * Takes a fresh first page. Rows already paged in beyond it stay (returning to History keeps its
+   * length and scroll position); listed rows that should be on the first page but are not were
+   * deleted elsewhere and go.
+   */
+  function replaceFirstPage(page: SavedProfile[], pageCursor: string | null): void {
+    const firstPageIds = page.map((profile) => profile.id);
+    const boundary = page.at(-1);
+    const beyond =
+      pageCursor && boundary
+        ? listIds.value.filter((id) => {
+            const profile = byId.value.get(id);
+            return profile !== undefined && !firstPageIds.includes(id) && isOlder(profile, boundary);
+          })
+        : [];
+    page.forEach(remember);
+    listIds.value = [...firstPageIds, ...beyond];
+    if (beyond.length === 0) nextCursor.value = pageCursor;
+    listGeneration += 1;
   }
 
   function forget(id: string): void {
@@ -59,9 +99,7 @@ export const useSavedProfilesStore = defineStore('savedProfiles', () => {
         // Refetch rather than overwrite newer local state with a stale snapshot; capped in case
         // the user keeps mutating.
         if (versionAtStart === mutationVersion || attempt === MAX_LOAD_ATTEMPTS) {
-          page.profiles.forEach(remember);
-          listIds.value = page.profiles.map((profile) => profile.id);
-          nextCursor.value = page.nextCursor;
+          replaceFirstPage(page.profiles, page.nextCursor);
           break;
         }
       }
@@ -90,8 +128,11 @@ export const useSavedProfilesStore = defineStore('savedProfiles', () => {
     const cursor = nextCursor.value;
     if (!cursor || moreState.value.status === AsyncStatus.Loading) return;
     moreState.value = LOADING;
+    const generation = listGeneration;
     try {
       const page = await listSavedProfiles(cursor);
+      // The list was reloaded meanwhile: this page continues a list that is gone.
+      if (generation !== listGeneration) return;
       page.profiles.forEach(remember);
       // A profile saved in this session may already be listed at the top: skip it.
       const listed = new Set(listIds.value);
@@ -99,17 +140,23 @@ export const useSavedProfilesStore = defineStore('savedProfiles', () => {
       nextCursor.value = page.nextCursor;
       moreState.value = SUCCESS;
     } catch (error) {
-      moreState.value = failed(errorMessage(error));
+      if (generation === listGeneration) moreState.value = failed(errorMessage(error));
     }
   }
 
   /** Learns which of `ids` are saved, in one request, whatever pages are loaded. */
   async function lookup(ids: readonly string[]): Promise<void> {
+    const versionAtStart = mutationVersion;
     const found = await findSavedProfiles(ids);
-    found.forEach(remember);
-    // Anything not returned is not saved (any more), even if an older copy was cached.
-    const foundIds = new Set(found.map((profile) => profile.id));
-    ids.filter((id) => !foundIds.has(id) && byId.value.has(id)).forEach(forget);
+    // A save, update or delete confirmed while this was in flight is newer than the answer.
+    const current = ids.filter((id) => !changedSince(id, versionAtStart));
+    const foundById = new Map(found.map((profile) => [profile.id, profile]));
+    for (const id of current) {
+      const profile = foundById.get(id);
+      // Anything not returned is not saved (any more), even if an older copy was cached.
+      if (profile) remember(profile);
+      else if (byId.value.has(id)) forget(id);
+    }
   }
 
   function findById(id: string): SavedProfile | undefined {
@@ -144,7 +191,7 @@ export const useSavedProfilesStore = defineStore('savedProfiles', () => {
   async function save(profile: Profile): Promise<SavedProfile> {
     try {
       const saved = await createSavedProfile(profile);
-      mutationVersion += 1;
+      markMutated(saved.id);
       addToList(saved);
       return saved;
     } catch (error) {
@@ -152,7 +199,7 @@ export const useSavedProfilesStore = defineStore('savedProfiles', () => {
       // the user's intent is satisfied, so adopt the stored copy instead of failing.
       if (!hasHttpStatus(error, HttpStatus.Conflict)) throw error;
       const existing = await getSavedProfile(profile.id);
-      mutationVersion += 1;
+      markMutated(existing.id);
       addToList(existing);
       return existing;
     }
@@ -161,13 +208,13 @@ export const useSavedProfilesStore = defineStore('savedProfiles', () => {
   async function update(id: string, details: ProfileDetails): Promise<SavedProfile> {
     try {
       const updated = await updateSavedProfile(id, details);
-      mutationVersion += 1;
+      markMutated(id);
       remember(updated);
       return updated;
     } catch (error) {
       // Deleted elsewhere: drop the stale copy, and let the caller tell the user.
       if (hasHttpStatus(error, HttpStatus.NotFound)) {
-        mutationVersion += 1;
+        markMutated(id);
         forget(id);
       }
       throw error;
@@ -181,7 +228,7 @@ export const useSavedProfilesStore = defineStore('savedProfiles', () => {
       // Deleting something already gone is a success from the user's point of view.
       if (!hasHttpStatus(error, HttpStatus.NotFound)) throw error;
     }
-    mutationVersion += 1;
+    markMutated(id);
     forget(id);
   }
 

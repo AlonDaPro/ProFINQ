@@ -1,4 +1,13 @@
-import { FieldError, FormField, Gender } from '@/domain/profile';
+import {
+  EARLIEST_DATE_OF_BIRTH,
+  FieldError,
+  FormField,
+  Gender,
+  PHONE_MAX_DIALABLE,
+  PHONE_MIN_DIALABLE,
+  STREET_NUMBER_MAX,
+  STREET_NUMBER_MIN,
+} from '@/domain/profile';
 
 /** Hebrew copy for the profile detail screen (Screen 3), which is rendered RTL. */
 export const he = {
@@ -33,13 +42,13 @@ export const he = {
     [FieldError.NoLetters]: () => 'השדה חייב לכלול אותיות',
     [FieldError.InvalidEmail]: () => 'כתובת דוא״ל לא תקינה, למשל name@example.com',
     [FieldError.InvalidPhone]: () =>
-      'מספר טלפון לא תקין: 5 עד 20 ספרות, ואפשר רווח, מקף, נקודה, לוכסן או סוגריים ביניהן',
+      `מספר טלפון לא תקין: ${PHONE_MIN_DIALABLE} עד ${PHONE_MAX_DIALABLE} ספרות, ואפשר רווח, מקף, נקודה, לוכסן או סוגריים ביניהן`,
     [FieldError.NotWholeNumber]: () => 'מספר שלם בלבד',
-    [FieldError.OutOfRange]: () => 'מספר בין 1 ל־99999',
+    [FieldError.OutOfRange]: () => `מספר בין ${STREET_NUMBER_MIN} ל־${STREET_NUMBER_MAX}`,
     [FieldError.InvalidDate]: () => 'תאריך לא תקין',
-    [FieldError.TooOld]: () => 'התאריך מוקדם מ־1900',
+    [FieldError.TooOld]: () => `התאריך מוקדם מ־${EARLIEST_DATE_OF_BIRTH.slice(0, 4)}`,
     [FieldError.FutureDate]: () => 'תאריך הלידה לא יכול להיות בעתיד',
-    [FieldError.Server]: () => 'השרת דחה את הערך',
+    [FieldError.Server]: () => 'השרת דחה את הערך:',
   } satisfies Record<FieldError, (limit?: number) => string>,
   actions: { save: 'שמירה', update: 'עדכון', delete: 'מחיקה', back: 'חזרה', cancel: 'ביטול' },
   pending: { save: 'שומר…', update: 'מעדכן…', delete: 'מוחק…' },

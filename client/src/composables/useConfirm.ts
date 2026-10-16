@@ -1,4 +1,4 @@
-import { readonly, shallowRef } from 'vue';
+import { nextTick, readonly, shallowRef } from 'vue';
 import type { TextDirection } from '@/constants/locale';
 
 export enum ConfirmTone {
@@ -20,6 +20,8 @@ export interface ConfirmOptions {
 interface PendingConfirmation {
   options: ConfirmOptions;
   resolve: (confirmed: boolean) => void;
+  /** Where focus goes back to when the dialog closes (the dialog has no trigger element of its own). */
+  returnFocus: HTMLElement | null;
 }
 
 // One dialog for the whole app, rendered by <ConfirmDialog> in App.vue.
@@ -30,8 +32,9 @@ export function useConfirm() {
   function confirm(options: ConfirmOptions): Promise<boolean> {
     // A newer request supersedes one that is still open.
     pending.value?.resolve(false);
+    const active = document.activeElement;
     return new Promise((resolve) => {
-      pending.value = { options, resolve };
+      pending.value = { options, resolve, returnFocus: active instanceof HTMLElement ? active : null };
     });
   }
 
@@ -39,6 +42,10 @@ export function useConfirm() {
     const current = pending.value;
     pending.value = null;
     current?.resolve(confirmed);
+    // After the dialog unmounts; skipped if the action removed the element (e.g. navigated away).
+    void nextTick(() => {
+      if (current?.returnFocus?.isConnected) current.returnFocus.focus();
+    });
   }
 
   return { pending: readonly(pending), confirm, settle };

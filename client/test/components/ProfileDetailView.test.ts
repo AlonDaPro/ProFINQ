@@ -235,8 +235,50 @@ describe('ProfileDetailView: validation', () => {
 
     const email = field(wrapper, FormField.Email);
     expect(email.attributes('aria-invalid')).toBe('true');
-    expect(wrapper.get(`[id="${email.attributes('aria-describedby') ?? ''}"]`).text()).toBe('Invalid email');
+    const message = wrapper.get(`[id="${email.attributes('aria-describedby') ?? ''}"]`);
+    expect(message.text()).toContain(he.errors[FieldError.Server]());
+    // The server's English text is isolated, so the RTL sentence around it cannot reorder it.
+    expect(message.get('bdi[lang="en"]').text()).toBe('Invalid email');
     expect(wrapper.text()).toContain(he.feedback.fixFields);
+  });
+
+  it('reports a rejection it cannot pin on an input as a plain failure, not "fix the marked fields"', async () => {
+    api.getSavedProfile.mockResolvedValue(buildSavedProfile());
+    api.updateSavedProfile.mockRejectedValue(
+      new ApiError('Request validation failed', 400, [{ path: 'body.picture.large', message: 'Must be https' }]),
+    );
+    const { wrapper } = await mountDetail(`/saved/${buildSavedProfile().id}`);
+
+    await field(wrapper, FormField.City).setValue('Austin');
+    await wrapper.get('form').trigger('submit');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain(he.feedback.failed);
+    expect(wrapper.text()).not.toContain(he.feedback.fixFields);
+  });
+
+  it('flags stored data that is already invalid, so a disabled Save is explained', async () => {
+    api.getSavedProfile.mockResolvedValue(
+      buildSavedProfile({ location: { ...buildSavedProfile().location, country: 'Atlantis' } }),
+    );
+    const { wrapper } = await mountDetail(`/saved/${buildSavedProfile().id}`);
+
+    expect(field(wrapper, FormField.Country).attributes('aria-invalid')).toBe('true');
+    expect(wrapper.text()).toContain(he.errors[FieldError.InvalidChoice]());
+    expect(wrapper.text()).toContain(he.feedback.invalidForm(1));
+  });
+
+  it('keeps the page and explains when an update finds the profile deleted elsewhere', async () => {
+    api.getSavedProfile.mockResolvedValue(buildSavedProfile());
+    api.updateSavedProfile.mockRejectedValue(new ApiError('gone', 404));
+    const { wrapper } = await mountDetail(`/saved/${buildSavedProfile().id}`);
+
+    await field(wrapper, FormField.City).setValue('Austin');
+    await wrapper.get('form').trigger('submit');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain(he.feedback.deletedElsewhere);
+    expect(wrapper.find('form').exists()).toBe(true);
   });
 
   it('tells the user when the server is rate limiting', async () => {

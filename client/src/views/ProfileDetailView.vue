@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ChevronLeft } from '@lucide/vue';
-import { useId } from 'vue';
+import { nextTick, useId } from 'vue';
 import StatusMessage from '@/components/common/StatusMessage.vue';
 import ProfileActions from '@/components/profile/detail/ProfileActions.vue';
 import ProfileForm from '@/components/profile/detail/ProfileForm.vue';
@@ -35,6 +35,23 @@ const {
 } = useProfileDetail(props);
 
 const formId = useId();
+
+/** After a rejected save, take keyboard and screen-reader users straight to the first problem. */
+async function focusFirstInvalidField(): Promise<void> {
+  if (feedback.value?.tone !== FeedbackTone.Error) return;
+  await nextTick();
+  document.getElementById(formId)?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+}
+
+async function onSave(): Promise<void> {
+  await save();
+  await focusFirstInvalidField();
+}
+
+async function onUpdate(): Promise<void> {
+  await update();
+  await focusFirstInvalidField();
+}
 </script>
 
 <template>
@@ -66,7 +83,7 @@ const formId = useId();
           :form-id="formId"
           :errors="visibleErrors"
           :disabled="isBusy"
-          @submit="update"
+          @submit="onUpdate"
         />
 
         <!-- Always mounted: screen readers announce changes to an existing live region, not a new one. -->
@@ -76,7 +93,7 @@ const formId = useId();
             <bdi v-if="feedback.detail" lang="en">{{ feedback.detail }}</bdi>
           </StatusMessage>
           <!-- Why Save and Update are disabled, said once next to them. -->
-          <p v-else-if="isDirty && invalidFieldCount > 0" class="text-destructive text-sm font-medium">
+          <p v-else-if="invalidFieldCount > 0" class="text-destructive text-sm font-medium">
             {{ he.feedback.invalidForm(invalidFieldCount) }}
           </p>
         </div>
@@ -88,7 +105,7 @@ const formId = useId();
           :is-dirty="isDirty"
           :is-form-valid="isFormValid"
           :pending-action="pendingAction"
-          @save="save"
+          @save="onSave"
           @delete="remove"
           @back="goBack"
         />

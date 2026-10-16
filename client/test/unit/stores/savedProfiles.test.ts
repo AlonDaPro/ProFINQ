@@ -128,6 +128,43 @@ describe('saved profiles store: pagination', () => {
     expect(ids(store.profiles)).toEqual(['third', 'first', 'second']);
   });
 
+  it('drops a "show more" page that arrives after the list was reloaded', async () => {
+    const latePage = deferred<ReturnType<typeof page>>();
+    api.listSavedProfiles
+      .mockResolvedValueOnce(page([first], 'cursor-1'))
+      .mockReturnValueOnce(latePage.promise)
+      .mockResolvedValueOnce(page([second]));
+    const store = useSavedProfilesStore();
+    await store.load();
+
+    const loadingMore = store.loadMore();
+    await store.load();
+    latePage.resolve(page([third], 'cursor-3'));
+    await loadingMore;
+
+    expect(ids(store.profiles)).toEqual(['second']);
+    expect(store.hasMore).toBe(false);
+  });
+
+  it('keeps rows already paged in when the first page is refreshed, and drops ones deleted elsewhere', async () => {
+    const older = buildSavedProfile({ id: 'older', savedAt: '2026-01-01T00:00:00.000Z' });
+    const goneMeanwhile = buildSavedProfile({ id: 'gone', savedAt: '2026-03-01T00:00:00.000Z' });
+    const newest = buildSavedProfile({ id: 'newest', savedAt: '2026-04-01T00:00:00.000Z' });
+    const middle = buildSavedProfile({ id: 'middle', savedAt: '2026-02-01T00:00:00.000Z' });
+    api.listSavedProfiles
+      .mockResolvedValueOnce(page([newest, goneMeanwhile], 'cursor-1'))
+      .mockResolvedValueOnce(page([middle, older]))
+      .mockResolvedValueOnce(page([newest, middle], 'cursor-2'));
+    const store = useSavedProfilesStore();
+    await store.load();
+    await store.loadMore();
+
+    await store.load();
+
+    expect(ids(store.profiles)).toEqual(['newest', 'middle', 'older']);
+    expect(store.hasMore).toBe(false);
+  });
+
   it('keeps the loaded rows and reports the error when a page fails', async () => {
     api.listSavedProfiles.mockResolvedValueOnce(page([first], 'cursor-1')).mockRejectedValueOnce(new ApiError('down'));
     const store = useSavedProfilesStore();
@@ -151,6 +188,20 @@ describe('saved profiles store: lookup', () => {
     expect(api.findSavedProfiles).toHaveBeenCalledWith(['first', 'second']);
     expect(store.isSaved('second')).toBe(true);
     expect(store.isSaved('first')).toBe(false);
+  });
+
+  it('does not let an answer from before a save undo it', async () => {
+    const lateLookup = deferred<SavedProfile[]>();
+    api.findSavedProfiles.mockReturnValueOnce(lateLookup.promise);
+    api.createSavedProfile.mockResolvedValue(first);
+    const store = useSavedProfilesStore();
+
+    const looking = store.lookup(['first']);
+    await store.save(buildProfile({ id: 'first' }));
+    lateLookup.resolve([]);
+    await looking;
+
+    expect(store.isSaved('first')).toBe(true);
   });
 
   it('forgets a cached profile that the server no longer has', async () => {

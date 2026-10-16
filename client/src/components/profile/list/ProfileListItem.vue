@@ -36,7 +36,7 @@ const fullName = computed(() => formatFullName(props.profile.name));
       </span>
       <span class="cell">
         <span :class="CELL_LABEL">{{ en.list.columns.gender }}</span>
-        {{ profile.gender }}
+        {{ en.genders[profile.gender] }}
       </span>
       <span class="cell">
         <span :class="CELL_LABEL">{{ en.list.columns.country }}</span>

@@ -11,7 +11,7 @@ const profilePageSchema = z.object({
 
 export type ProfilePage = z.infer<typeof profilePageSchema>;
 
-export enum ProfileQueryParam {
+enum ProfileQueryParam {
   Cursor = 'cursor',
   Ids = 'ids',
 }

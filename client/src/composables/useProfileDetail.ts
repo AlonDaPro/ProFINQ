@@ -1,3 +1,4 @@
+import { useEventListener } from '@vueuse/core';
 import { computed, reactive, ref, shallowRef, watch } from 'vue';
 import { onBeforeRouteLeave, useRouter } from 'vue-router';
 import { ApiError, errorMessage, hasHttpStatus } from '@/api/http';
@@ -65,14 +66,19 @@ export function useProfileDetail(props: { readonly source: ProfileSource; readon
   const form = reactive<ProfileForm>({ ...EMPTY_FORM });
   /** The server's own messages for fields it rejected; cleared as soon as the user edits. */
   const serverErrors = shallowRef<Partial<Record<FormField, string>>>({});
-  /** Keeps the page rendered while a delete navigates away, instead of flashing "not found". */
-  const deletingSnapshot = shallowRef<Profile | null>(null);
+  /**
+   * Keeps the page rendered when the profile disappears under it: while a delete navigates away
+   * (instead of flashing "not found"), or after an update finds it deleted elsewhere.
+   */
+  const retainedProfile = shallowRef<Profile | null>(null);
   let bypassLeaveGuard = false;
+  /** The discard prompt is open: a navigation is pending and nothing else may replace it. */
+  let isLeaving = false;
 
   const savedProfile = computed(() => savedStore.findById(props.id));
   const isPersisted = computed(() => savedProfile.value !== undefined);
   const profile = computed<Profile | undefined>(
-    () => savedProfile.value ?? randomStore.findById(props.id) ?? deletingSnapshot.value ?? undefined,
+    () => savedProfile.value ?? randomStore.findById(props.id) ?? retainedProfile.value ?? undefined,
   );
   const storedForm = computed(() => (profile.value ? toProfileForm(profile.value) : null));
 
@@ -82,16 +88,19 @@ export function useProfileDetail(props: { readonly source: ProfileSource; readon
   const isDirty = computed(() => (storedForm.value ? !formsEqual(form, storedForm.value) : false));
   const isBusy = computed(() => pendingAction.value !== null);
 
-  /** Errors on the fields the user changed, plus anything the server rejected. */
+  /**
+   * Every invalid field, plus anything the server rejected. Valid stored data shows no errors until
+   * an edit breaks it; stored data that is already invalid (e.g. an unknown country) is flagged at
+   * once, so a disabled Save never goes unexplained.
+   */
   const visibleErrors = computed(() => {
     const errors: Partial<Record<FormField, VisibleFieldError>> = {};
     const clientErrors = parsed.value.ok ? {} : parsed.value.errors;
     for (const field of FORM_FIELDS) {
       const serverMessage = serverErrors.value[field];
       const code = clientErrors[field];
-      const isChanged = storedForm.value ? form[field].trim() !== storedForm.value[field].trim() : false;
       if (serverMessage) errors[field] = { code: FieldError.Server, serverMessage };
-      else if (code && isChanged) errors[field] = { code };
+      else if (code) errors[field] = { code };
     }
     return errors;
   });
@@ -145,8 +154,11 @@ export function useProfileDetail(props: { readonly source: ProfileSource; readon
         const field = SERVER_PATH_TO_FIELD[detail.path];
         if (field) mapped[field] ??= detail.message;
       }
-      serverErrors.value = mapped;
-      return failure(he.feedback.fixFields);
+      // Nothing to mark (e.g. the picture was rejected): say what failed instead of "fix the fields".
+      if (Object.keys(mapped).length > 0) {
+        serverErrors.value = mapped;
+        return failure(he.feedback.fixFields);
+      }
     }
     if (hasHttpStatus(error, HttpStatus.NotFound)) return failure(he.feedback.deletedElsewhere);
     if (hasHttpStatus(error, HttpStatus.TooManyRequests)) return failure(he.feedback.tooManyRequests);
@@ -183,7 +195,7 @@ export function useProfileDetail(props: { readonly source: ProfileSource; readon
       // user is still here: Back stays enabled during a save, and must not be undone.
       const route = router.currentRoute.value;
       const isStillHere = route.name === RouteName.ProfileDetail && route.params.id === current.id;
-      if (props.source === ProfileSource.Random && isStillHere) {
+      if (props.source === ProfileSource.Random && isStillHere && !isLeaving) {
         await router.replace(detailRouteFor(ProfileSource.Saved, current.id));
       }
       return success(matchesForm ? he.feedback.saved : he.feedback.alreadySaved);
@@ -196,7 +208,14 @@ export function useProfileDetail(props: { readonly source: ProfileSource; readon
       const result = parsed.value;
       if (!current || !isDirty.value || !result.ok) return null;
       if (isPersisted.value) {
-        const updated = pickDetails(await savedStore.update(current.id, result.details));
+        let updated: ProfileDetails;
+        try {
+          updated = pickDetails(await savedStore.update(current.id, result.details));
+        } catch (error) {
+          // A 404 drops the profile from the store; keep it on screen so the message is seen.
+          if (hasHttpStatus(error, HttpStatus.NotFound)) retainedProfile.value = current;
+          throw error;
+        }
         // Keep the random list in sync if this person is also in the current batch.
         randomStore.update(current.id, updated);
         resetForm(updated);
@@ -219,7 +238,7 @@ export function useProfileDetail(props: { readonly source: ProfileSource; readon
       tone: ConfirmTone.Danger,
     });
     if (!confirmed) return;
-    deletingSnapshot.value = current;
+    retainedProfile.value = current;
     await runAction(DetailAction.Delete, async () => {
       await savedStore.remove(current.id);
       bypassLeaveGuard = true;
@@ -227,25 +246,46 @@ export function useProfileDetail(props: { readonly source: ProfileSource; readon
       return null;
     });
     // Still here means the delete failed; stop pretending the profile exists.
-    if (!bypassLeaveGuard) deletingSnapshot.value = null;
+    if (!bypassLeaveGuard) retainedProfile.value = null;
   }
 
+  /** Resolves once the navigation has finished (or was cancelled), so callers stay busy until then. */
   async function goBack(): Promise<void> {
     // Prefer real history so the list keeps its filter and scroll position;
     // fall back to the list route when the page was opened directly.
-    if (typeof router.options.history.state.back === 'string') router.back();
-    else await router.push(listRouteFor(props.source));
+    if (typeof router.options.history.state.back !== 'string') {
+      await router.push(listRouteFor(props.source));
+      return;
+    }
+    const navigated = new Promise<void>((resolve) => {
+      const stop = router.afterEach(() => {
+        stop();
+        resolve();
+      });
+    });
+    router.back();
+    await navigated;
   }
 
-  onBeforeRouteLeave(() => {
+  onBeforeRouteLeave(async () => {
     if (bypassLeaveGuard || !isDirty.value) return true;
-    return confirm({
-      ...HEBREW_DIALOG,
-      title: he.confirm.discardTitle,
-      body: he.confirm.discardBody,
-      confirmLabel: he.confirm.discard,
-      tone: ConfirmTone.Danger,
-    });
+    isLeaving = true;
+    try {
+      return await confirm({
+        ...HEBREW_DIALOG,
+        title: he.confirm.discardTitle,
+        body: he.confirm.discardBody,
+        confirmLabel: he.confirm.discard,
+        tone: ConfirmTone.Danger,
+      });
+    } finally {
+      isLeaving = false;
+    }
+  });
+
+  // Reload and tab close bypass the router: let the browser ask before unsaved edits are lost.
+  useEventListener(window, 'beforeunload', (event: BeforeUnloadEvent) => {
+    if (isDirty.value && !bypassLeaveGuard) event.preventDefault();
   });
 
   return {

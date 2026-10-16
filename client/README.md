@@ -29,10 +29,10 @@ npm run preview
 
 Both are optional. Copy `.env.example` to `.env` to override them.
 
-| Variable            | Default                 | What it does                                                                                                                                        |
-| ------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `VITE_API_BASE_URL` | `/api`                  | Where the browser finds the API. For a deployed build use a full URL; it is added to the CSP, and the API must allow this origin in `CORS_ORIGINS`. |
-| `API_PROXY_TARGET`  | `http://localhost:4000` | Dev and preview server only: where `/api` is proxied.                                                                                               |
+| Variable            | Default                 | What it does                                                                                                                                                                                                                        |
+| ------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VITE_API_BASE_URL` | `/api`                  | Where the browser finds the API. Keep `/api` when the API shares the site's origin (as on Vercel). Only for an API on another origin, use its full URL: it is added to the CSP, and the API must allow this site in `CORS_ORIGINS`. |
+| `API_PROXY_TARGET`  | `http://localhost:4000` | Dev and preview server only: where `/api` is proxied.                                                                                                                                                                               |
 
 ## Scripts
 
@@ -64,7 +64,8 @@ src/
   lib/              cn() for merging Tailwind classes, enumLookup() for narrowing strings to enums
   stores/           randomProfiles (the batch, in memory) and savedProfiles (server state, paged, cached by id)
   styles/           tokens, the shadcn theme mapping, base styles and a few utilities
-  types/            AsyncState and Feedback
+  router/           routes (lazy-loaded) and route names
+  types/            AsyncState, Feedback and FieldMessage
   views/            one component per route
 test/               unit/, components/ and fixtures/
 ```
@@ -73,9 +74,9 @@ test/               unit/, components/ and fixtures/
 
 Every field is editable. The form holds strings; `parseProfileForm` (`src/domain/profile/profileForm.ts`) turns them into typed `ProfileDetails` (the street number becomes a number, text is trimmed) or into one error code per field. The rules mirror the server's zod schemas, and the server stays the authority.
 
-- An error shows under its field (wired with `aria-invalid` / `aria-describedby`) once that field has been touched, and a summary says how many fields need fixing. Save and Update stay disabled while anything is invalid, so Enter cannot submit either.
+- An error shows under every invalid field as soon as it is invalid (wired with `aria-invalid` / `aria-describedby`); valid stored data shows none until an edit breaks it. A summary says how many fields need fixing, and Save and Update stay disabled meanwhile, so Enter cannot submit either.
 - Title and country are searchable comboboxes over closed lists (`Title`, the ISO 3166-1 `COUNTRIES`); typing only filters, so a free-text value can never be saved.
-- If the server still rejects a value, its `{ path, message }` details are mapped back onto the matching inputs. A 404 (deleted in another tab) or 429 (rate limit) gets its own message.
+- If the server still rejects a value, its `{ path, message }` details are mapped back onto the matching inputs (its English text isolated in `<bdi>`), and focus moves to the first one. A 404 (deleted in another tab) or 429 (rate limit) gets its own message.
 
 ## Styling
 

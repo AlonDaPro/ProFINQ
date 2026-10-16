@@ -2,11 +2,12 @@
 import { CircleAlert } from '@lucide/vue';
 import { useId } from 'vue';
 import { Label } from '@/components/ui/label';
+import type { FieldMessage } from '@/types/fieldMessage';
 
 defineProps<{
   label: string;
   /** Shown under the control, and wired to it through aria-describedby. */
-  error?: string | null;
+  error?: FieldMessage | null;
   /** Small note after the label, e.g. "(optional)". */
   note?: string;
 }>();
@@ -28,7 +29,10 @@ const errorId = useId();
     <slot :id="controlId" :described-by="error ? errorId : undefined" :invalid="Boolean(error)" />
     <p v-if="error" :id="errorId" class="text-destructive flex items-start gap-1.5 text-xs">
       <CircleAlert class="mt-px size-3.5 shrink-0" aria-hidden="true" />
-      <span>{{ error }}</span>
+      <span>
+        {{ error.text }}
+        <bdi v-if="error.detail" lang="en">{{ error.detail }}</bdi>
+      </span>
     </p>
   </div>
 </template>

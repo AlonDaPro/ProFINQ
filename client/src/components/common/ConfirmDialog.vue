@@ -35,7 +35,13 @@ onUnmounted(removeAfterEach);
 <template>
   <AlertDialog :open="isOpen" @update:open="onOpenChange">
     <!-- Rendered in a portal outside the page, so it carries its own direction and language. -->
-    <AlertDialogContent v-if="options" :dir="options.dir" :lang="options.lang">
+    <!-- Focus is returned by useConfirm, not Reka: there is no trigger element for Reka to return to. -->
+    <AlertDialogContent
+      v-if="options"
+      :dir="options.dir"
+      :lang="options.lang"
+      @close-auto-focus="(event: Event) => event.preventDefault()"
+    >
       <AlertDialogHeader>
         <AlertDialogTitle class="text-xl font-medium">{{ options.title }}</AlertDialogTitle>
         <AlertDialogDescription class="text-muted-foreground">{{ options.body }}</AlertDialogDescription>
