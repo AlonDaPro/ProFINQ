@@ -52,22 +52,30 @@ src/
   api/              fetch wrapper (timeouts, cancellation, typed errors), randomuser.me adapter, profiles API
   components/
     ui/             shadcn-vue primitives (Button, Card, Badge, Input, AlertDialog...), owned and themed here
-    common/         StatusMessage, ConfirmDialog
+    common/         StatusMessage, ConfirmDialog, FormField (label + error wiring), OptionCombobox (searchable closed list)
     brand/          the Profinq logo as an inline SVG component
     layout/         header and the About section
     decor/          the fanned cards on Home
     profile/        list/ and detail/ building blocks for Screens 1 to 3
   composables/      useRouteFilter (filter in the URL), useProfileDetail (Screen 3), useConfirm
   constants/        app, HTTP, API and locale constants
-  domain/           Profile types and schemas, name and age helpers, filter logic
+  domain/           Profile types and schemas, the Screen 3 form (parsing, field errors), country list, name and age helpers, filter logic
   i18n/             en.ts for Screens 0 to 2, he.ts for Screen 3
-  lib/              cn() for merging Tailwind classes
-  stores/           randomProfiles (the batch, in memory) and savedProfiles (server state)
+  lib/              cn() for merging Tailwind classes, enumLookup() for narrowing strings to enums
+  stores/           randomProfiles (the batch, in memory) and savedProfiles (server state, paged, cached by id)
   styles/           tokens, the shadcn theme mapping, base styles and a few utilities
   types/            AsyncState and Feedback
   views/            one component per route
 test/               unit/, components/ and fixtures/
 ```
+
+## Screen 3: editing and validation
+
+Every field is editable. The form holds strings; `parseProfileForm` (`src/domain/profile/profileForm.ts`) turns them into typed `ProfileDetails` (the street number becomes a number, text is trimmed) or into one error code per field. The rules mirror the server's zod schemas, and the server stays the authority.
+
+- An error shows under its field (wired with `aria-invalid` / `aria-describedby`) once that field has been touched, and a summary says how many fields need fixing. Save and Update stay disabled while anything is invalid, so Enter cannot submit either.
+- Title and country are searchable comboboxes over closed lists (`Title`, the ISO 3166-1 `COUNTRIES`); typing only filters, so a free-text value can never be saved.
+- If the server still rejects a value, its `{ path, message }` details are mapped back onto the matching inputs. A 404 (deleted in another tab) or 429 (rate limit) gets its own message.
 
 ## Styling
 
@@ -81,4 +89,5 @@ Layout uses logical CSS properties (`margin-inline-start`, `ps-*`, `pe-*`) throu
 - Rubik is self-hosted as a variable font, and per-script unicode ranges mean the browser downloads only the scripts a page uses.
 - The logo is a 3 KB inline SVG. Thumbnails load lazily with fixed sizes, so nothing shifts, and the Screen 3 portrait loads first.
 - Superseded randomuser.me requests are cancelled, and concurrent loads of the saved list share one request.
+- History loads 20 profiles at a time ("Show more" follows the server's cursor). Screen 1 marks saved people with one batched `?ids=` request, not by loading the whole history.
 - The production build ships a strict Content-Security-Policy (`script-src 'self'`, images and connections only to this site and randomuser.me). Every API response is validated with zod, and nothing is rendered with `v-html`.

@@ -25,11 +25,7 @@ interface PendingConfirmation {
 // One dialog for the whole app, rendered by <ConfirmDialog> in App.vue.
 const pending = shallowRef<PendingConfirmation | null>(null);
 
-/**
- * Promise-based replacement for window.confirm(), backed by a native <dialog>:
- * focus trapping, Escape to cancel and the top layer come from the browser,
- * and unlike window.confirm it can be styled and translated (e.g. to Hebrew).
- */
+/** A promise-based window.confirm() rendered by <ConfirmDialog> (a Reka AlertDialog), so it can be styled and translated. */
 export function useConfirm() {
   function confirm(options: ConfirmOptions): Promise<boolean> {
     // A newer request supersedes one that is still open.

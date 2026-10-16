@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
-import ProfileListPage from '@/components/profile/list/ProfileListPage.vue';
+import { computed, onMounted, watch } from 'vue';
+import ProfileList from '@/components/profile/list/ProfileList.vue';
 import { Button } from '@/components/ui/button';
 import type { Profile } from '@/domain/profile';
 import { en } from '@/i18n/en';
@@ -16,9 +16,18 @@ onMounted(() => {
   // Only fetch when there is no batch yet (direct visit or reload). Coming back
   // from the detail screen must keep the current batch and its in-memory edits.
   if (randomProfiles.state.status === AsyncStatus.Idle) void randomProfiles.fetchBatch();
-  // Marks people who are already saved; a failure here is not fatal for this screen.
-  void savedProfiles.ensureLoaded();
 });
+
+// Ask the server which people in this batch are already saved: one request for the whole
+// batch, however many saved profiles exist. Non-fatal: the list works without the badges.
+const batchIds = computed(() => randomProfiles.profiles.map((profile) => profile.id));
+watch(
+  batchIds,
+  (ids) => {
+    if (ids.length > 0) savedProfiles.lookup(ids).catch(() => undefined);
+  },
+  { immediate: true },
+);
 
 const isSaved = (profile: Profile) => savedProfiles.isSaved(profile.id);
 // Already-saved people open in "saved" mode, so the detail screen offers Delete, not Save.
@@ -27,7 +36,7 @@ const detailRoute = (profile: Profile) =>
 </script>
 
 <template>
-  <ProfileListPage
+  <ProfileList
     :title="en.list.randomTitle"
     :source="en.list.randomSource"
     :profiles="randomProfiles.profiles"
@@ -42,5 +51,5 @@ const detailRoute = (profile: Profile) =>
         en.list.fetchNewBatch
       }}</Button>
     </template>
-  </ProfileListPage>
+  </ProfileList>
 </template>

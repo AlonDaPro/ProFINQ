@@ -25,11 +25,13 @@ const props = defineProps<{
   emptyMessage: string;
   detailRoute: (profile: T) => RouteLocationRaw;
   isSaved?: (profile: T) => boolean;
+  /** More pages exist on the server: counts read "20+" and filters cover the loaded rows. */
+  hasMore?: boolean;
 }>();
 
 const emit = defineEmits<{ retry: [] }>();
 
-defineSlots<{ actions?(): unknown }>();
+defineSlots<{ actions?(): unknown; footer?(): unknown }>();
 
 const { filter, clear } = useRouteFilter();
 
@@ -44,8 +46,8 @@ const isLoading = computed(() => props.state.status === AsyncStatus.Loading);
 const hasProfiles = computed(() => props.profiles.length > 0);
 const resultSummary = computed(() =>
   isFilterActive(filter)
-    ? en.list.filteredCount(visibleProfiles.value.length, props.profiles.length)
-    : en.list.count(props.profiles.length),
+    ? en.list.filteredCount(visibleProfiles.value.length, props.profiles.length, props.hasMore)
+    : en.list.count(props.profiles.length, props.hasMore),
 );
 </script>
 
@@ -109,6 +111,7 @@ const resultSummary = computed(() =>
             />
           </ul>
         </Card>
+        <slot name="footer" />
       </template>
     </div>
   </section>

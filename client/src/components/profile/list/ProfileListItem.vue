@@ -11,6 +11,10 @@ const props = defineProps<{
   saved: boolean;
 }>();
 
+// The column header names each cell on wide screens; on phones, rows stack and show the label.
+const CELL_LABEL =
+  'sr-only max-[860px]:not-sr-only max-[860px]:me-2 max-[860px]:font-medium max-[860px]:text-foreground';
+
 const fullName = computed(() => formatFullName(props.profile.name));
 </script>
 
@@ -31,19 +35,19 @@ const fullName = computed(() => formatFullName(props.profile.name));
         <Badge v-if="saved" variant="brand">{{ en.list.savedBadge }}</Badge>
       </span>
       <span class="cell">
-        <span class="cell-label">{{ en.list.columns.gender }}</span>
+        <span :class="CELL_LABEL">{{ en.list.columns.gender }}</span>
         {{ profile.gender }}
       </span>
       <span class="cell">
-        <span class="cell-label">{{ en.list.columns.country }}</span>
+        <span :class="CELL_LABEL">{{ en.list.columns.country }}</span>
         <bdi>{{ profile.location.country }}</bdi>
       </span>
       <span class="cell">
-        <span class="cell-label">{{ en.list.columns.phone }}</span>
+        <span :class="CELL_LABEL">{{ en.list.columns.phone }}</span>
         <span dir="ltr">{{ profile.phone }}</span>
       </span>
       <span class="cell">
-        <span class="cell-label">{{ en.list.columns.email }}</span>
+        <span :class="CELL_LABEL">{{ en.list.columns.email }}</span>
         <span dir="ltr">{{ profile.email }}</span>
       </span>
     </RouterLink>
@@ -95,16 +99,6 @@ li + li {
   overflow-wrap: anywhere;
 }
 
-/* The column header names each cell on wide screens; the label is for screen readers there. */
-.cell-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
 @media (max-width: 860px) {
   .row {
     grid-template-columns: var(--thumbnail-size) 1fr;
@@ -115,17 +109,6 @@ li + li {
   .thumbnail {
     grid-row: span 5;
     align-self: start;
-  }
-
-  .cell-label {
-    position: static;
-    width: auto;
-    height: auto;
-    overflow: visible;
-    clip-path: none;
-    margin-inline-end: var(--space-2);
-    color: var(--color-ink);
-    font-weight: var(--weight-medium);
   }
 }
 </style>

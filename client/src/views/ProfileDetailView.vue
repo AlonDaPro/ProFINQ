@@ -1,13 +1,11 @@
 <script setup lang="ts">
-import { useId } from 'vue';
 import { ChevronLeft } from '@lucide/vue';
-import ProfileActions from '@/components/profile/detail/ProfileActions.vue';
-import ProfileFacts from '@/components/profile/detail/ProfileFacts.vue';
-import ProfileHero from '@/components/profile/detail/ProfileHero.vue';
-import ProfileNameForm from '@/components/profile/detail/ProfileNameForm.vue';
+import { useId } from 'vue';
 import StatusMessage from '@/components/common/StatusMessage.vue';
+import ProfileActions from '@/components/profile/detail/ProfileActions.vue';
+import ProfileForm from '@/components/profile/detail/ProfileForm.vue';
+import ProfileHero from '@/components/profile/detail/ProfileHero.vue';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { useProfileDetail } from '@/composables/useProfileDetail';
 import { he } from '@/i18n/he';
 import { ProfileSource } from '@/router/routeNames';
@@ -19,10 +17,11 @@ const props = defineProps<{ source: ProfileSource; id: string }>();
 const {
   profile,
   savedProfile,
-  lookup,
-  draft,
-  validationErrors,
-  isDraftValid,
+  profileLookup,
+  form,
+  visibleErrors,
+  isFormValid,
+  invalidFieldCount,
   isDirty,
   isPersisted,
   isBusy,
@@ -35,7 +34,7 @@ const {
   retryLookup,
 } = useProfileDetail(props);
 
-const nameFormId = useId();
+const formId = useId();
 </script>
 
 <template>
@@ -44,9 +43,9 @@ const nameFormId = useId();
     flips, and every piece of user data inside it is direction-isolated.
   -->
   <article dir="rtl" lang="he">
-    <div v-if="lookup.status !== AsyncStatus.Success" class="page-width narrow">
-      <StatusMessage v-if="lookup.status === AsyncStatus.Error" :tone="FeedbackTone.Error">
-        {{ he.feedback.failed }} <bdi lang="en">{{ lookup.message }}</bdi>
+    <div v-if="profileLookup.status !== AsyncStatus.Success" class="page-width narrow">
+      <StatusMessage v-if="profileLookup.status === AsyncStatus.Error" :tone="FeedbackTone.Error">
+        {{ he.feedback.failed }} <bdi lang="en">{{ profileLookup.message }}</bdi>
         <template #action>
           <Button variant="outline" @click="retryLookup">{{ he.retry }}</Button>
         </template>
@@ -62,19 +61,13 @@ const nameFormId = useId();
       </header>
 
       <div class="page-width narrow content">
-        <Card class="p-6">
-          <ProfileNameForm
-            v-model:title="draft.title"
-            v-model:first="draft.first"
-            v-model:last="draft.last"
-            :form-id="nameFormId"
-            :errors="validationErrors"
-            :show-errors="isDirty"
-            :disabled="isBusy"
-            @submit="update"
-          />
-        </Card>
-        <ProfileFacts :profile="profile" />
+        <ProfileForm
+          v-model:form="form"
+          :form-id="formId"
+          :errors="visibleErrors"
+          :disabled="isBusy"
+          @submit="update"
+        />
 
         <!-- Always mounted: screen readers announce changes to an existing live region, not a new one. -->
         <div aria-live="polite">
@@ -82,14 +75,18 @@ const nameFormId = useId();
             {{ feedback.message }}
             <bdi v-if="feedback.detail" lang="en">{{ feedback.detail }}</bdi>
           </StatusMessage>
+          <!-- Why Save and Update are disabled, said once next to them. -->
+          <p v-else-if="isDirty && invalidFieldCount > 0" class="text-destructive text-sm font-medium">
+            {{ he.feedback.invalidForm(invalidFieldCount) }}
+          </p>
         </div>
 
         <ProfileActions
-          :form-id="nameFormId"
+          :form-id="formId"
           :is-persisted="isPersisted"
           :is-busy="isBusy"
           :is-dirty="isDirty"
-          :is-draft-valid="isDraftValid"
+          :is-form-valid="isFormValid"
           :pending-action="pendingAction"
           @save="save"
           @delete="remove"

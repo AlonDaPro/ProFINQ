@@ -7,7 +7,7 @@ export const en = {
     lead: 'Each fetch brings ten new people from randomuser.me. Open anyone to fix their name or save them.',
     fetch: 'Fetch',
     history: 'History',
-    savedCount: (count: number) => `${count} saved`,
+    savedCount: (count: number, hasMore: boolean) => `${count}${hasMore ? '+' : ''} saved`,
     stepsLabel: 'How it works',
     steps: {
       fetch: { title: 'Fetch ten people', body: 'A fresh batch from randomuser.me every time you press Fetch.' },
@@ -25,7 +25,10 @@ export const en = {
     title: 'A small app, built like a real one.',
     body: 'Profinq is a full-stack home assignment. The Vue client fetches people from randomuser.me, and the ones you keep go through a Node API into PostgreSQL. The profile screen is Hebrew and right-to-left, while names, emails and phone numbers stay left-to-right.',
     stack: [
-      { term: 'Client', detail: 'Vue 3, TypeScript, Pinia and Vue Router, styled with plain CSS.' },
+      {
+        term: 'Client',
+        detail: 'Vue 3, TypeScript, Pinia and Vue Router, with shadcn-vue components on Tailwind CSS.',
+      },
       { term: 'Server', detail: 'Node, Express 5 and PostgreSQL, with every request validated by zod.' },
       { term: 'Tests', detail: 'Unit, API and Playwright end-to-end suites, run in CI on every push.' },
     ],
@@ -45,8 +48,13 @@ export const en = {
     retry: 'Try again',
     loading: 'Loading people',
     savedBadge: 'Saved',
-    count: (count: number) => `${count} ${count === 1 ? 'person' : 'people'}`,
-    filteredCount: (visible: number, total: number) => `${visible} of ${total}`,
+    count: (count: number, hasMore = false) =>
+      hasMore ? `${count}+ people` : `${count} ${count === 1 ? 'person' : 'people'}`,
+    filteredCount: (visible: number, total: number, hasMore = false) =>
+      hasMore ? `${visible} of the first ${total}` : `${visible} of ${total}`,
+    showMore: 'Show more',
+    loadingMore: 'Loading more…',
+    loadMoreFailed: 'Could not load more profiles.',
     columns: { name: 'Name', gender: 'Gender', country: 'Country', phone: 'Phone', email: 'Email' },
   },
   filters: {
@@ -57,4 +65,21 @@ export const en = {
     allCountries: 'All countries',
   },
   notFound: { title: 'Page not found', body: 'That address does not match any page.', home: 'Go home' },
+  validation: {
+    required: 'Required',
+    tooLong: (max: number) => `Up to ${max} characters`,
+    invalidTitle: 'Choose a valid title',
+    invalidName: 'Name contains invalid characters',
+  },
+  titleOptions: {
+    mr: 'Mr',
+    mrs: 'Mrs',
+    ms: 'Ms',
+    miss: 'Miss',
+    dr: 'Dr',
+    master: 'Master',
+    rev: 'Rev',
+    sir: 'Sir',
+    mx: 'Mx',
+  },
 } as const;

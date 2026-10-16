@@ -42,7 +42,9 @@ async function fetchRandomPeople(): Promise<void> {
         <Button as-child size="lg" variant="outline" class="min-w-36">
           <RouterLink :to="{ name: RouteName.SavedList }">
             {{ en.home.history }}
-            <Badge v-if="savedCount !== null" variant="brand">{{ en.home.savedCount(savedCount) }}</Badge>
+            <Badge v-if="savedCount !== null" variant="brand">{{
+              en.home.savedCount(savedCount, savedProfiles.hasMore)
+            }}</Badge>
           </RouterLink>
         </Button>
       </div>

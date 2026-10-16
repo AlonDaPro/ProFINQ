@@ -1,46 +1,65 @@
-import { Gender } from '@/domain/profile';
+import { FieldError, FormField, Gender } from '@/domain/profile';
 
 /** Hebrew copy for the profile detail screen (Screen 3), which is rendered RTL. */
 export const he = {
   documentTitle: 'כרטיס פרופיל',
   status: { saved: 'שמור במאגר', notSaved: 'טרם נשמר', savedOn: 'נשמר ב־' },
-  sections: { personal: 'פרטים אישיים', address: 'כתובת', contact: 'פרטי קשר' },
-  labels: {
-    gender: 'מגדר',
-    name: 'שם',
-    title: 'תואר',
-    firstName: 'שם פרטי',
-    lastName: 'שם משפחה',
-    age: 'גיל',
-    birthYear: 'שנת לידה',
-    street: 'רחוב',
-    city: 'עיר',
-    state: 'מחוז',
-    country: 'ארץ',
-    email: 'דוא״ל',
-    phone: 'טלפון',
-  },
-  genders: { [Gender.Male]: 'זכר', [Gender.Female]: 'נקבה' } as Readonly<Record<string, string>>,
+  sections: { name: 'שם', personal: 'פרטים אישיים', address: 'כתובת', contact: 'פרטי קשר' },
+  fields: {
+    [FormField.Title]: 'תואר',
+    [FormField.First]: 'שם פרטי',
+    [FormField.Last]: 'שם משפחה',
+    [FormField.Gender]: 'מגדר',
+    [FormField.DateOfBirth]: 'תאריך לידה',
+    [FormField.StreetNumber]: 'מספר בית',
+    [FormField.StreetName]: 'רחוב',
+    [FormField.City]: 'עיר',
+    [FormField.State]: 'מחוז',
+    [FormField.Country]: 'ארץ',
+    [FormField.Email]: 'דוא״ל',
+    [FormField.Phone]: 'טלפון',
+  } satisfies Record<FormField, string>,
+  labels: { age: 'גיל', birthYear: 'שנת לידה', optional: '(לא חובה)' },
+  title: { placeholder: 'ללא תואר', search: 'חיפוש תואר', noMatches: 'אין תואר כזה', clear: 'ניקוי התואר' },
+  country: { placeholder: 'בחירת ארץ', search: 'חיפוש ארץ', noMatches: 'אין ארץ כזו' },
+  genders: { [Gender.Male]: 'זכר', [Gender.Female]: 'נקבה' } satisfies Record<Gender, string>,
+  /** One message per validation problem; `limit` is the field's maximum where one applies. */
+  errors: {
+    [FieldError.Required]: () => 'שדה חובה',
+    [FieldError.TooLong]: (limit?: number) => (limit ? `עד ${limit} תווים` : 'הערך ארוך מדי'),
+    [FieldError.UnsupportedCharacters]: () => 'השדה מכיל תווים שאינם נתמכים',
+    [FieldError.InvalidChoice]: () => 'יש לבחור אחת מהאפשרויות',
+    [FieldError.InvalidName]: () => 'אותיות בלבד, ואפשר גם רווח, מקף, נקודה וגרש',
+    [FieldError.NoLetters]: () => 'השדה חייב לכלול אותיות',
+    [FieldError.InvalidEmail]: () => 'כתובת דוא״ל לא תקינה, למשל name@example.com',
+    [FieldError.InvalidPhone]: () =>
+      'מספר טלפון לא תקין: 5 עד 20 ספרות, ואפשר רווח, מקף, נקודה, לוכסן או סוגריים ביניהן',
+    [FieldError.NotWholeNumber]: () => 'מספר שלם בלבד',
+    [FieldError.OutOfRange]: () => 'מספר בין 1 ל־99999',
+    [FieldError.InvalidDate]: () => 'תאריך לא תקין',
+    [FieldError.TooOld]: () => 'התאריך מוקדם מ־1900',
+    [FieldError.FutureDate]: () => 'תאריך הלידה לא יכול להיות בעתיד',
+    [FieldError.Server]: () => 'השרת דחה את הערך',
+  } satisfies Record<FieldError, (limit?: number) => string>,
   actions: { save: 'שמירה', update: 'עדכון', delete: 'מחיקה', back: 'חזרה', cancel: 'ביטול' },
   pending: { save: 'שומר…', update: 'מעדכן…', delete: 'מוחק…' },
   feedback: {
     saved: 'הפרופיל נשמר במאגר',
-    alreadySaved: 'הפרופיל כבר היה שמור במאגר. מוצג השם השמור.',
-    updatedSaved: 'השם עודכן במאגר',
-    updatedLocal: 'השם עודכן ברשימה. הפרופיל עדיין לא נשמר במאגר.',
+    alreadySaved: 'הפרופיל כבר היה שמור במאגר. מוצגים הפרטים השמורים.',
+    updatedSaved: 'הפרטים עודכנו במאגר',
+    updatedLocal: 'הפרטים עודכנו ברשימה. הפרופיל עדיין לא נשמר במאגר.',
     failed: 'הפעולה נכשלה:',
+    fixFields: 'השרת דחה חלק מהשדות. יש לתקן את השדות המסומנים.',
+    invalidForm: (count: number) => (count === 1 ? 'יש לתקן שדה אחד לפני השמירה' : `יש לתקן ${count} שדות לפני השמירה`),
     noLongerInBatch: 'הפרופיל כבר אינו ברשימה הנוכחית',
     deletedElsewhere: 'הפרופיל נמחק מהמאגר ולכן לא ניתן לעדכן אותו',
-  },
-  validation: {
-    required: 'שדה חובה',
-    tooLong: (max: number) => `עד ${max} תווים`,
+    tooManyRequests: 'יותר מדי בקשות. יש לנסות שוב בעוד דקה.',
   },
   confirm: {
     deleteTitle: 'למחוק את הפרופיל?',
     deleteBody: 'הפרופיל יימחק מהמאגר. אפשר לשמור אותו שוב רק אם יופיע ברשימה אקראית.',
     discardTitle: 'לצאת בלי לשמור?',
-    discardBody: 'השינויים בשם לא נשמרו ויאבדו.',
+    discardBody: 'יש שינויים שלא נשמרו, והם יאבדו.',
     discard: 'יציאה בלי שמירה',
   },
   loading: 'טוען פרופיל…',
@@ -51,7 +70,3 @@ export const he = {
     saved: 'הפרופיל אינו קיים במאגר. ייתכן שנמחק.',
   },
 } as const;
-
-export function genderLabel(gender: string): string {
-  return he.genders[gender.toLowerCase()] ?? gender;
-}
