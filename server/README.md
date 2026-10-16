@@ -1,4 +1,4 @@
-# Profiles API (server)
+# Profinq API (server)
 
 Node + TypeScript REST API (Express 5, `pg`, zod) that stores user profiles in PostgreSQL.
 
