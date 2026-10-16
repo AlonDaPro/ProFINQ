@@ -57,6 +57,16 @@ Open http://localhost:5173 and press **Fetch**.
 
 If port 5432 is taken, start the database with `POSTGRES_PORT=5433 docker compose up -d` and change the port in `server/.env`. To look at the data, connect any SQL client to `localhost:5432`, database `profiles`, user and password `profiles`.
 
+## Deploy to Vercel
+
+`vercel.json` deploys both packages as one Vercel project with two [services](https://vercel.com/docs/services) on one domain: `client` (the Vite build) serves every path, and `server` (Express, as a Vercel Function) serves `/api/*`. The browser calls the API on the same origin, so no CORS setup is needed.
+
+1. Import the repository in Vercel (or run `vercel deploy`).
+2. Add a Postgres database from the Vercel Marketplace (Neon); it sets `DATABASE_URL`. The tables are created on the API's first start.
+3. Set `TRUST_PROXY_HOPS=1` on the project, so rate limits see the real client IP behind Vercel's proxy.
+
+`vercel dev` runs both services locally the same way.
+
 ## Architecture
 
 <p align="center">
