@@ -15,7 +15,6 @@ const countrySelectId = useId();
 </script>
 
 <template>
-  <!-- Filtering is instant (no debounce): it runs in memory over at most a few dozen rows. -->
   <form
     class="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
     role="search"

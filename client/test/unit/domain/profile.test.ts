@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { birthYear, calculateAge, formatFullName, Title } from '@/domain/profile';
 import {
-  buildSearchIndex,
   distinctCountries,
   filterProfiles,
   normalizeForSearch,
@@ -10,7 +9,7 @@ import {
 import type { Profile } from '@/domain/profile';
 import { buildProfile } from '../../fixtures/profiles';
 
-const filter = (profiles: Profile[], criteria: ProfileFilter) => filterProfiles(buildSearchIndex(profiles), criteria);
+const filter = (profiles: Profile[], criteria: ProfileFilter) => filterProfiles(profiles, criteria);
 
 describe('filterProfiles', () => {
   const john = buildProfile({ id: '1', name: { title: Title.Mr, first: 'John', last: 'Smith' } });

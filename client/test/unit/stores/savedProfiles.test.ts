@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/api/http';
 import * as profilesApi from '@/api/profilesApi';
 import { pickDetails, type SavedProfile } from '@/domain/profile';
+import { EMPTY_FILTER } from '@/domain/filter/profileFilter';
 import { useSavedProfilesStore } from '@/stores/savedProfiles';
 import { AsyncStatus } from '@/types/asyncState';
 import { buildProfile, buildSavedProfile } from '../../fixtures/profiles';
@@ -87,7 +88,7 @@ describe('saved profiles store: pagination', () => {
 
     await store.loadMore();
 
-    expect(api.listSavedProfiles).toHaveBeenLastCalledWith('cursor-1');
+    expect(api.listSavedProfiles).toHaveBeenLastCalledWith(EMPTY_FILTER, 'cursor-1');
     expect(ids(store.profiles)).toEqual(['first', 'second']);
     expect(store.hasMore).toBe(false);
   });
@@ -290,5 +291,46 @@ describe('saved profiles store: mutations', () => {
     const store = useSavedProfilesStore();
 
     await expect(store.fetchById('abc.def')).resolves.toBeNull();
+  });
+});
+
+describe('saved profiles store: server-side filter', () => {
+  const spain = { name: '', country: 'Spain' };
+
+  it('loads the list for a filter, and again when the filter changes', async () => {
+    api.listSavedProfiles.mockResolvedValueOnce(page([first])).mockResolvedValueOnce(page([second]));
+    const store = useSavedProfilesStore();
+
+    await store.load(spain);
+    await store.ensureLoaded(EMPTY_FILTER);
+
+    expect(api.listSavedProfiles).toHaveBeenNthCalledWith(1, spain);
+    expect(api.listSavedProfiles).toHaveBeenNthCalledWith(2, EMPTY_FILTER);
+    expect(ids(store.profiles)).toEqual(['second']);
+  });
+
+  it('applies only the latest filter when answers arrive out of order', async () => {
+    const slow = deferred<ReturnType<typeof page>>();
+    api.listSavedProfiles.mockReturnValueOnce(slow.promise).mockResolvedValueOnce(page([second]));
+    const store = useSavedProfilesStore();
+
+    const older = store.load({ name: 'jo', country: '' });
+    await store.load({ name: 'john', country: '' });
+    slow.resolve(page([first]));
+    await older;
+
+    expect(ids(store.profiles)).toEqual(['second']);
+  });
+
+  it('does not put a new save into a filtered list it may not match', async () => {
+    api.listSavedProfiles.mockResolvedValue(page([first]));
+    api.createSavedProfile.mockResolvedValue(second);
+    const store = useSavedProfilesStore();
+    await store.load(spain);
+
+    await store.save(buildProfile({ id: 'second' }));
+
+    expect(ids(store.profiles)).toEqual(['first']);
+    expect(store.isSaved('second')).toBe(true);
   });
 });

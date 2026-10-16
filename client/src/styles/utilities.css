@@ -31,3 +31,11 @@
 .icon-directional:dir(rtl) {
   transform: scaleX(-1);
 }
+
+/* A message page: not-found screens. */
+.not-found {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-4);
+  padding-block: var(--space-8);
+}

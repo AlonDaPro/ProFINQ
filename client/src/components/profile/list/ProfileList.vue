@@ -1,5 +1,5 @@
 <script setup lang="ts" generic="T extends Profile">
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 import type { RouteLocationRaw } from 'vue-router';
 import ProfileFilters from '@/components/profile/list/ProfileFilters.vue';
 import ProfileListItem from '@/components/profile/list/ProfileListItem.vue';
@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useRouteFilter } from '@/composables/useRouteFilter';
-import { buildSearchIndex, distinctCountries, filterProfiles, isFilterActive } from '@/domain/filter/profileFilter';
+import { distinctCountries, filterProfiles, isFilterActive, type ProfileFilter } from '@/domain/filter/profileFilter';
 import type { Profile } from '@/domain/profile';
 import { en } from '@/i18n/en';
 import { AsyncStatus, type AsyncState } from '@/types/asyncState';
@@ -25,30 +25,51 @@ const props = defineProps<{
   emptyMessage: string;
   detailRoute: (profile: T) => RouteLocationRaw;
   isSaved?: (profile: T) => boolean;
-  /** More pages exist on the server: counts read "20+" and filters cover the loaded rows. */
+  /** More pages exist on the server: counts read "20+". */
   hasMore?: boolean;
+  /** `profiles` arrive already filtered by the server; the parent reloads them on `filterChange`. */
+  serverFiltered?: boolean;
+  /** Server mode: the country options (the client can only see the rows it has). */
+  countries?: readonly string[];
 }>();
 
-const emit = defineEmits<{ retry: [] }>();
+const emit = defineEmits<{ retry: []; filterChange: [filter: ProfileFilter] }>();
 
 defineSlots<{ actions?(): unknown; footer?(): unknown }>();
 
 const { filter, clear } = useRouteFilter();
 
-const searchIndex = computed(() => buildSearchIndex(props.profiles));
-const visibleProfiles = computed(() => filterProfiles(searchIndex.value, filter));
+// Server mode: tell the parent about the filter now (it loads the first page) and on every change.
+watch(
+  () => ({ ...filter }),
+  (next) => {
+    if (props.serverFiltered) emit('filterChange', next);
+  },
+  { immediate: true },
+);
+
+const visibleProfiles = computed(() =>
+  props.serverFiltered ? props.profiles : filterProfiles(props.profiles, filter),
+);
 const countries = computed(() => {
-  const options = distinctCountries(props.profiles);
+  const options = props.countries ? [...props.countries] : distinctCountries(props.profiles);
   // Keep a country that came from the URL selectable even if no row has it.
   return filter.country && !options.includes(filter.country) ? [filter.country, ...options] : options;
 });
 const isLoading = computed(() => props.state.status === AsyncStatus.Loading);
+const isLoaded = computed(() => props.state.status === AsyncStatus.Success);
 const hasProfiles = computed(() => props.profiles.length > 0);
-const resultSummary = computed(() =>
-  isFilterActive(filter)
-    ? en.list.filteredCount(visibleProfiles.value.length, props.profiles.length, props.hasMore)
-    : en.list.count(props.profiles.length, props.hasMore),
+const isFiltered = computed(() => isFilterActive(filter));
+/** Rows exist but none match, or (server mode) the server found none for this filter. */
+const hasNoMatches = computed(() =>
+  hasProfiles.value ? visibleProfiles.value.length === 0 : props.serverFiltered && isFiltered.value && isLoaded.value,
 );
+const resultSummary = computed(() => {
+  if (!isFiltered.value) return en.list.count(props.profiles.length, props.hasMore);
+  return props.serverFiltered
+    ? en.list.matchCount(props.profiles.length, props.hasMore)
+    : en.list.filteredCount(visibleProfiles.value.length, props.profiles.length);
+});
 </script>
 
 <template>
@@ -58,7 +79,7 @@ const resultSummary = computed(() =>
         <div class="heading">
           <Badge variant="tag">{{ source }}</Badge>
           <h1>{{ title }}</h1>
-          <p v-if="hasProfiles" class="summary" role="status">{{ resultSummary }}</p>
+          <p v-if="hasProfiles || hasNoMatches" class="summary" role="status">{{ resultSummary }}</p>
         </div>
         <slot name="actions" />
         <ProfileFilters
@@ -82,17 +103,17 @@ const resultSummary = computed(() =>
         <ProfileListSkeleton />
       </Card>
 
-      <StatusMessage v-else-if="state.status === AsyncStatus.Success && !hasProfiles">{{ emptyMessage }}</StatusMessage>
+      <StatusMessage v-else-if="hasNoMatches">
+        {{ en.list.noMatches }}
+        <template #action>
+          <Button variant="outline" @click="clear">{{ en.list.clearFilters }}</Button>
+        </template>
+      </StatusMessage>
+
+      <StatusMessage v-else-if="isLoaded && !hasProfiles">{{ emptyMessage }}</StatusMessage>
 
       <template v-else-if="hasProfiles">
-        <StatusMessage v-if="visibleProfiles.length === 0">
-          {{ en.list.noMatches }}
-          <template #action>
-            <Button variant="outline" @click="clear">{{ en.list.clearFilters }}</Button>
-          </template>
-        </StatusMessage>
-
-        <Card v-else class="gap-0 overflow-hidden py-0">
+        <Card class="gap-0 overflow-hidden py-0">
           <div class="list-header" aria-hidden="true">
             <span />
             <span>{{ en.list.columns.name }}</span>

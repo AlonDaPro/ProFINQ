@@ -63,7 +63,7 @@ export enum FieldError {
   Server = 'server',
 }
 
-export type FieldErrors = Partial<Record<FormField, FieldError>>;
+type FieldErrors = Partial<Record<FormField, FieldError>>;
 
 /** Input `maxlength` caps, so the browser stops typing where the server would refuse. */
 export const FIELD_MAX_LENGTH: Partial<Record<FormField, number>> = {
@@ -159,7 +159,7 @@ const profileFormSchema = z.object({
   [FormField.Phone]: requiredText(PHONE_MAX_LENGTH).refine(isPhoneNumber, FieldError.InvalidPhone),
 });
 
-export type FormParseResult = { ok: true; details: ProfileDetails } | { ok: false; errors: FieldErrors };
+type FormParseResult = { ok: true; details: ProfileDetails } | { ok: false; errors: FieldErrors };
 
 const parseFieldError = enumLookup(Object.values(FieldError));
 const parseFormField = enumLookup(Object.values(FormField));

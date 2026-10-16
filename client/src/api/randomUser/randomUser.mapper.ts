@@ -24,7 +24,7 @@ export function toCountry(raw: string): string {
   return isCountry(trimmed) ? trimmed : (COUNTRY_ALIASES.get(trimmed) ?? trimmed);
 }
 
-/** The only place that knows randomuser.me's shape; the rest of the app speaks `Profile`. */
+/** Maps a validated randomuser.me record onto `Profile`, which is all the rest of the app speaks. */
 function toProfile(user: RandomUser): Profile {
   return {
     id: user.login.uuid,

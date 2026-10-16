@@ -6,29 +6,40 @@ import {
   deleteSavedProfile,
   findSavedProfiles,
   getSavedProfile,
+  listSavedCountries,
   listSavedProfiles,
   updateSavedProfile,
 } from '@/api/profilesApi';
 import { HttpStatus } from '@/constants/http';
+import { EMPTY_FILTER, isFilterActive, sameFilter, type ProfileFilter } from '@/domain/filter/profileFilter';
 import type { Profile, ProfileDetails, SavedProfile } from '@/domain/profile';
 import { AsyncStatus, failed, IDLE, LOADING, SUCCESS, type AsyncState } from '@/types/asyncState';
 
 // A first-page request that overlaps a save or delete may return a snapshot from before it.
 const MAX_LOAD_ATTEMPTS = 3;
 
+/** Newest first, like the server: by savedAt, then id. */
+function isOlder(a: SavedProfile, b: SavedProfile): boolean {
+  return a.savedAt < b.savedAt || (a.savedAt === b.savedAt && a.id < b.id);
+}
+
 /**
  * Server state for saved profiles: a cache by id (answers "is this saved?" for any id) plus the
- * History list, loaded page by page. Mutations are pessimistic: local state changes only after
- * the server confirms, so the UI never shows a profile as saved when it is not.
+ * History list for one filter, loaded page by page and filtered by the server. Mutations are
+ * pessimistic: local state changes only after the server confirms.
  */
 export const useSavedProfilesStore = defineStore('savedProfiles', () => {
   const byId = ref(new Map<string, SavedProfile>());
   const listIds = ref<string[]>([]);
+  /** The filter `listIds` was loaded with. */
+  const listFilter = shallowRef<ProfileFilter>(EMPTY_FILTER);
   const nextCursor = ref<string | null>(null);
   /** The first page (also the state shown by History). */
   const state = shallowRef<AsyncState>(IDLE);
   /** "Show more" requests. */
   const moreState = shallowRef<AsyncState>(IDLE);
+  /** Countries of saved profiles: the options of History's country filter. */
+  const countries = ref<string[]>([]);
 
   const profiles = computed(() =>
     listIds.value.flatMap((id) => {
@@ -38,42 +49,40 @@ export const useSavedProfilesStore = defineStore('savedProfiles', () => {
   );
   const hasMore = computed(() => nextCursor.value !== null);
 
-  let pendingLoad: Promise<void> | null = null;
+  let pendingLoad: { filter: ProfileFilter; promise: Promise<void> } | null = null;
+  /** Bumped by each first-page load, so only the latest one is applied. */
+  let loadSequence = 0;
+  /** Bumped whenever the list is replaced, so a "Show more" page for the old list is dropped. */
+  let listGeneration = 0;
   /** Bumped by every confirmed save, update or delete. */
   let mutationVersion = 0;
   /** The mutationVersion of the last change to each id, so an older answer cannot undo it. */
   const mutatedAt = new Map<string, number>();
-  /** Bumped whenever the list is replaced, so a "Show more" page for the old list is dropped. */
-  let listGeneration = 0;
 
   function markMutated(id: string): void {
     mutationVersion += 1;
     mutatedAt.set(id, mutationVersion);
   }
 
-  function changedSince(id: string, version: number): boolean {
-    return (mutatedAt.get(id) ?? 0) > version;
-  }
-
   function remember(profile: SavedProfile): void {
     byId.value.set(profile.id, profile);
   }
 
-  /** Newest first, like the server: by savedAt, then id. */
-  function isOlder(a: SavedProfile, b: SavedProfile): boolean {
-    return a.savedAt < b.savedAt || (a.savedAt === b.savedAt && a.id < b.id);
+  function forget(id: string): void {
+    byId.value.delete(id);
+    listIds.value = listIds.value.filter((listedId) => listedId !== id);
   }
 
   /**
-   * Takes a fresh first page. Rows already paged in beyond it stay (returning to History keeps its
-   * length and scroll position); listed rows that should be on the first page but are not were
-   * deleted elsewhere and go.
+   * Takes a fresh first page. For the same filter, rows already paged in beyond it stay (returning
+   * to History keeps its length and scroll position); listed rows that should be on the first page
+   * but are not were deleted elsewhere and go. A new filter starts a new list.
    */
-  function replaceFirstPage(page: SavedProfile[], pageCursor: string | null): void {
+  function replaceFirstPage(filter: ProfileFilter, page: SavedProfile[], pageCursor: string | null): void {
     const firstPageIds = page.map((profile) => profile.id);
     const boundary = page.at(-1);
     const beyond =
-      pageCursor && boundary
+      pageCursor && boundary && sameFilter(filter, listFilter.value)
         ? listIds.value.filter((id) => {
             const profile = byId.value.get(id);
             return profile !== undefined && !firstPageIds.includes(id) && isOlder(profile, boundary);
@@ -82,46 +91,48 @@ export const useSavedProfilesStore = defineStore('savedProfiles', () => {
     page.forEach(remember);
     listIds.value = [...firstPageIds, ...beyond];
     if (beyond.length === 0) nextCursor.value = pageCursor;
+    listFilter.value = filter;
     listGeneration += 1;
   }
 
-  function forget(id: string): void {
-    byId.value.delete(id);
-    listIds.value = listIds.value.filter((listedId) => listedId !== id);
-  }
-
-  async function runLoad(): Promise<void> {
+  async function runLoad(filter: ProfileFilter): Promise<void> {
+    const sequence = ++loadSequence;
     state.value = LOADING;
     try {
       for (let attempt = 1; ; attempt++) {
         const versionAtStart = mutationVersion;
-        const page = await listSavedProfiles();
+        const page = await listSavedProfiles(filter);
+        // A newer load (e.g. the user typed on) owns the list now.
+        if (sequence !== loadSequence) return;
         // Refetch rather than overwrite newer local state with a stale snapshot; capped in case
         // the user keeps mutating.
         if (versionAtStart === mutationVersion || attempt === MAX_LOAD_ATTEMPTS) {
-          replaceFirstPage(page.profiles, page.nextCursor);
+          replaceFirstPage(filter, page.profiles, page.nextCursor);
           break;
         }
       }
       state.value = SUCCESS;
       moreState.value = IDLE;
     } catch (error) {
-      state.value = failed(errorMessage(error));
+      if (sequence === loadSequence) state.value = failed(errorMessage(error));
     }
   }
 
-  /** (Re)loads the first page. Concurrent callers share one request. */
-  function load(): Promise<void> {
-    pendingLoad ??= runLoad().finally(() => {
-      pendingLoad = null;
+  /** (Re)loads the first page for `filter`. Concurrent callers with the same filter share one request. */
+  function load(filter: ProfileFilter = listFilter.value): Promise<void> {
+    if (pendingLoad && sameFilter(pendingLoad.filter, filter)) return pendingLoad.promise;
+    const promise = runLoad(filter).finally(() => {
+      if (pendingLoad?.promise === promise) pendingLoad = null;
     });
-    return pendingLoad;
+    pendingLoad = { filter, promise };
+    return promise;
   }
 
-  /** Loads the first page unless it is already there; retries after a failure. */
-  function ensureLoaded(): Promise<void> {
-    if (state.value.status === AsyncStatus.Idle || state.value.status === AsyncStatus.Error) return load();
-    return pendingLoad ?? Promise.resolve();
+  /** Loads the first page for `filter` unless it is already there; retries after a failure. */
+  function ensureLoaded(filter: ProfileFilter = EMPTY_FILTER): Promise<void> {
+    const isLoaded = state.value.status === AsyncStatus.Success || state.value.status === AsyncStatus.Loading;
+    if (!isLoaded || !sameFilter(listFilter.value, filter)) return load(filter);
+    return pendingLoad?.promise ?? Promise.resolve();
   }
 
   async function loadMore(): Promise<void> {
@@ -130,7 +141,7 @@ export const useSavedProfilesStore = defineStore('savedProfiles', () => {
     moreState.value = LOADING;
     const generation = listGeneration;
     try {
-      const page = await listSavedProfiles(cursor);
+      const page = await listSavedProfiles(listFilter.value, cursor);
       // The list was reloaded meanwhile: this page continues a list that is gone.
       if (generation !== listGeneration) return;
       page.profiles.forEach(remember);
@@ -144,12 +155,21 @@ export const useSavedProfilesStore = defineStore('savedProfiles', () => {
     }
   }
 
+  /** Refreshes the country options. Non-fatal: the filter keeps the options it has. */
+  async function loadCountries(): Promise<void> {
+    try {
+      countries.value = await listSavedCountries();
+    } catch {
+      // The list itself reports connection problems; the filter is secondary.
+    }
+  }
+
   /** Learns which of `ids` are saved, in one request, whatever pages are loaded. */
   async function lookup(ids: readonly string[]): Promise<void> {
     const versionAtStart = mutationVersion;
     const found = await findSavedProfiles(ids);
     // A save, update or delete confirmed while this was in flight is newer than the answer.
-    const current = ids.filter((id) => !changedSince(id, versionAtStart));
+    const current = ids.filter((id) => (mutatedAt.get(id) ?? 0) <= versionAtStart);
     const foundById = new Map(found.map((profile) => [profile.id, profile]));
     for (const id of current) {
       const profile = foundById.get(id);
@@ -183,7 +203,9 @@ export const useSavedProfilesStore = defineStore('savedProfiles', () => {
 
   function addToList(profile: SavedProfile): void {
     remember(profile);
-    if (state.value.status === AsyncStatus.Success && !listIds.value.includes(profile.id)) {
+    // Under a filter the new profile may not match; the next load decides where it belongs.
+    const showsEveryone = !isFilterActive(listFilter.value);
+    if (state.value.status === AsyncStatus.Success && showsEveryone && !listIds.value.includes(profile.id)) {
       listIds.value = [profile.id, ...listIds.value];
     }
   }
@@ -237,9 +259,11 @@ export const useSavedProfilesStore = defineStore('savedProfiles', () => {
     state,
     moreState,
     hasMore,
+    countries,
     load,
     ensureLoaded,
     loadMore,
+    loadCountries,
     lookup,
     findById,
     isSaved,

@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { onMounted, onUnmounted } from 'vue';
 import StatusMessage from '@/components/common/StatusMessage.vue';
 import ProfileList from '@/components/profile/list/ProfileList.vue';
 import { Button } from '@/components/ui/button';
+import { SERVER_FILTER_DEBOUNCE_MS } from '@/constants/app';
+import type { ProfileFilter } from '@/domain/filter/profileFilter';
 import type { SavedProfile } from '@/domain/profile';
 import { en } from '@/i18n/en';
 import { detailRouteFor, ProfileSource } from '@/router/routeNames';
@@ -12,9 +14,28 @@ import { FeedbackTone } from '@/types/feedback';
 
 const savedProfiles = useSavedProfilesStore();
 
-// Always refresh on entry: the database is the source of truth and may have changed in
-// another tab. Rows already loaded stay visible while the request runs.
-onMounted(() => void savedProfiles.load());
+let previousFilter: ProfileFilter | undefined;
+let pendingNameLoad: ReturnType<typeof setTimeout> | undefined;
+
+// The first call (on entry) always loads: the database may have changed in another tab, and rows
+// already loaded stay visible meanwhile. Typing a name waits for a pause; a country loads at once.
+function onFilterChange(filter: ProfileFilter): void {
+  clearTimeout(pendingNameLoad);
+  const isNameOnly = previousFilter !== undefined && previousFilter.country === filter.country;
+  previousFilter = filter;
+  if (isNameOnly) pendingNameLoad = setTimeout(() => void savedProfiles.load(filter), SERVER_FILTER_DEBOUNCE_MS);
+  else void savedProfiles.load(filter);
+}
+
+/** Retries the filter the user asked for last, which may not be the one the list still shows. */
+function retry(): void {
+  void savedProfiles.load(previousFilter);
+}
+
+onMounted(() => void savedProfiles.loadCountries());
+onUnmounted(() => {
+  clearTimeout(pendingNameLoad);
+});
 
 const detailRoute = (profile: SavedProfile) => detailRouteFor(ProfileSource.Saved, profile.id);
 </script>
@@ -28,7 +49,10 @@ const detailRoute = (profile: SavedProfile) => detailRouteFor(ProfileSource.Save
     :empty-message="en.list.savedEmpty"
     :detail-route="detailRoute"
     :has-more="savedProfiles.hasMore"
-    @retry="savedProfiles.load"
+    server-filtered
+    :countries="savedProfiles.countries"
+    @filter-change="onFilterChange"
+    @retry="retry"
   >
     <template #footer>
       <StatusMessage v-if="savedProfiles.moreState.status === AsyncStatus.Error" :tone="FeedbackTone.Error">

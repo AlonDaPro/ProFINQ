@@ -1,14 +1,10 @@
 import { reactive, watch } from 'vue';
-import { useRoute, useRouter, type LocationQuery, type LocationQueryValue } from 'vue-router';
+import { useRoute, useRouter, type LocationQuery } from 'vue-router';
 import { EMPTY_FILTER, FilterQueryKey, type ProfileFilter } from '@/domain/filter/profileFilter';
-
-function firstString(value: LocationQueryValue | LocationQueryValue[] | undefined): string {
-  const first = Array.isArray(value) ? value[0] : value;
-  return typeof first === 'string' ? first : '';
-}
+import { firstValue } from '@/router/routeNames';
 
 function readFilter(query: LocationQuery): ProfileFilter {
-  return { name: firstString(query[FilterQueryKey.Name]), country: firstString(query[FilterQueryKey.Country]) };
+  return { name: firstValue(query[FilterQueryKey.Name]), country: firstValue(query[FilterQueryKey.Country]) };
 }
 
 /**

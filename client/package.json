@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --build && vite build",
+    "build": "vue-tsc --build tsconfig.app.json && vite build",
     "preview": "vite preview",
     "typecheck": "vue-tsc --build",
     "lint": "eslint .",

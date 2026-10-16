@@ -11,7 +11,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { ConfirmTone, useConfirm } from '@/composables/useConfirm';
+import { useConfirm } from '@/composables/useConfirm';
 
 const { pending, settle } = useConfirm();
 const router = useRouter();
@@ -50,7 +50,7 @@ onUnmounted(removeAfterEach);
         <!-- Reka focuses Cancel when the dialog opens: the safe choice is the default. -->
         <AlertDialogCancel>{{ options.cancelLabel }}</AlertDialogCancel>
         <!-- A plain Button, not AlertDialogAction: Action closes first, which would resolve "no". -->
-        <Button :variant="options.tone === ConfirmTone.Danger ? 'destructive' : 'default'" @click="settle(true)">
+        <Button variant="destructive" @click="settle(true)">
           {{ options.confirmLabel }}
         </Button>
       </AlertDialogFooter>

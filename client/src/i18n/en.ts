@@ -53,8 +53,9 @@ export const en = {
     savedBadge: 'Saved',
     count: (count: number, hasMore = false) =>
       hasMore ? `${count}+ people` : `${count} ${count === 1 ? 'person' : 'people'}`,
-    filteredCount: (visible: number, total: number, hasMore = false) =>
-      hasMore ? `${visible} of the first ${total}` : `${visible} of ${total}`,
+    filteredCount: (visible: number, total: number) => `${visible} of ${total}`,
+    matchCount: (count: number, hasMore = false) =>
+      hasMore ? `${count}+ matches` : `${count} ${count === 1 ? 'match' : 'matches'}`,
     showMore: 'Show more',
     loadingMore: 'Loading more…',
     loadMoreFailed: 'Could not load more profiles.',

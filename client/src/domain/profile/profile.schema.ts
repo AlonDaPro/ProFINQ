@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { Gender, Title } from './profile.constants';
 
+// Validates what the API returns: the shape and the closed sets. The server owns the business rules.
+
 const isoDateTime = z.string().datetime({ offset: true });
 
-/** Validates what the API returns: the shape and the closed sets. The server owns the business rules. */
 export const profileNameSchema = z.object({
   title: z.union([z.literal(''), z.nativeEnum(Title)]),
   first: z.string(),
@@ -22,7 +23,6 @@ export const profileDetailsSchema = z.object({
     state: z.string(),
     country: z.string(),
   }),
-  /** A calendar date, YYYY-MM-DD. */
   dateOfBirth: z.string().date(),
 });
 

@@ -5,6 +5,7 @@ const TRAILING_SLASHES = /\/+$/;
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL).replace(TRAILING_SLASHES, '');
 
 export const PROFILES_ENDPOINT = `${API_BASE_URL}/profiles`;
+export const COUNTRIES_ENDPOINT = `${API_BASE_URL}/countries`;
 
 export const RANDOM_USER_ENDPOINT = 'https://randomuser.me/api/';
 

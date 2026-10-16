@@ -1,4 +1,5 @@
 import type { RouteLocationRaw } from 'vue-router';
+import { enumLookup } from '@/lib/enumLookup';
 
 export enum RouteName {
   Home = 'home',
@@ -14,13 +15,17 @@ export enum ProfileSource {
   Saved = 'saved',
 }
 
-const SOURCES_BY_PARAM: ReadonlyMap<string, ProfileSource> = new Map(
-  Object.values(ProfileSource).map((source) => [source, source]),
-);
+const toProfileSource = enumLookup(Object.values(ProfileSource));
 
 /** The route pattern already restricts the param; this narrows it to the enum. */
 export function parseProfileSource(param: string): ProfileSource {
-  return SOURCES_BY_PARAM.get(param) ?? ProfileSource.Random;
+  return toProfileSource(param) ?? ProfileSource.Random;
+}
+
+/** A route param or query value may repeat (`?a=1&a=2`) or be null (`?a`); the first string wins. */
+export function firstValue(value: string | null | (string | null)[] | undefined): string {
+  const first = Array.isArray(value) ? value[0] : value;
+  return first ?? '';
 }
 
 const LIST_ROUTE: Readonly<Record<ProfileSource, RouteName>> = {

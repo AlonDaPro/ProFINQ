@@ -13,12 +13,3 @@ import { RouteName } from '@/router/routeNames';
     </Button>
   </section>
 </template>
-
-<style scoped>
-.not-found {
-  display: grid;
-  justify-items: start;
-  gap: var(--space-4);
-  padding-block: var(--space-8);
-}
-</style>

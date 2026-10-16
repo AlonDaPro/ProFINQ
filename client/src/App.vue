@@ -20,7 +20,7 @@ onUnmounted(removeAfterEach);
 <template>
   <a class="skip-link" href="#main">{{ en.nav.skipToContent }}</a>
   <AppHeader />
-  <!-- Full width: each view decides between full-bleed bands and the centered .container. -->
+  <!-- Full width: each view decides between full-bleed bands and the centered .page-width. -->
   <main id="main" ref="main" class="app-main" tabindex="-1">
     <RouterView />
   </main>

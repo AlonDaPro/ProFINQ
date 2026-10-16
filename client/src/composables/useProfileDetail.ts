@@ -2,7 +2,7 @@ import { useEventListener } from '@vueuse/core';
 import { computed, reactive, ref, shallowRef, watch } from 'vue';
 import { onBeforeRouteLeave, useRouter } from 'vue-router';
 import { ApiError, errorMessage, hasHttpStatus } from '@/api/http';
-import { ConfirmTone, useConfirm } from '@/composables/useConfirm';
+import { useConfirm } from '@/composables/useConfirm';
 import { HttpStatus } from '@/constants/http';
 import { HEBREW_LANG, TextDirection } from '@/constants/locale';
 import {
@@ -235,7 +235,6 @@ export function useProfileDetail(props: { readonly source: ProfileSource; readon
       title: he.confirm.deleteTitle,
       body: he.confirm.deleteBody,
       confirmLabel: he.actions.delete,
-      tone: ConfirmTone.Danger,
     });
     if (!confirmed) return;
     retainedProfile.value = current;
@@ -276,7 +275,6 @@ export function useProfileDetail(props: { readonly source: ProfileSource; readon
         title: he.confirm.discardTitle,
         body: he.confirm.discardBody,
         confirmLabel: he.confirm.discard,
-        tone: ConfirmTone.Danger,
       });
     } finally {
       isLeaving = false;

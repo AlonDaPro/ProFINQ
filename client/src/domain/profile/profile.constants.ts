@@ -15,7 +15,6 @@ export enum Title {
   Mx = 'Mx',
 }
 
-/** Narrows a string to a `Title`, or `undefined` when it is not one. */
 export const parseTitle = enumLookup(Object.values(Title));
 
 export enum Gender {

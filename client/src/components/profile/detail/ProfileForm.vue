@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import FormField from '@/components/common/FormField.vue';
+import LabeledField from '@/components/common/LabeledField.vue';
 import OptionCombobox from '@/components/common/OptionCombobox.vue';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import {
   COUNTRIES,
   EARLIEST_DATE_OF_BIRTH,
   FIELD_MAX_LENGTH,
-  FormField as Field,
+  FormField,
   Gender,
   latestCalendarDate,
   type ProfileForm,
@@ -23,7 +23,7 @@ import type { FieldMessage } from '@/types/fieldMessage';
 
 const props = defineProps<{
   formId: string;
-  errors: Partial<Record<Field, VisibleFieldError>>;
+  errors: Partial<Record<FormField, VisibleFieldError>>;
   disabled: boolean;
 }>();
 
@@ -35,7 +35,7 @@ const GENDERS = Object.values(Gender);
 const TITLES = Object.values(Title);
 const LATEST_DATE_OF_BIRTH = latestCalendarDate();
 
-function errorText(field: Field): FieldMessage | null {
+function errorText(field: FormField): FieldMessage | null {
   const error = props.errors[field];
   if (!error) return null;
   return { text: he.errors[error.code](FIELD_MAX_LENGTH[field]), detail: error.serverMessage };
@@ -43,8 +43,8 @@ function errorText(field: Field): FieldMessage | null {
 
 /** Age and birth year follow the date being typed, but only once it is a real date. */
 const derivedAge = computed(() => {
-  const value = form.value[Field.DateOfBirth];
-  if (props.errors[Field.DateOfBirth] || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const value = form.value[FormField.DateOfBirth];
+  if (props.errors[FormField.DateOfBirth]) return null;
   return { age: calculateAge(value), year: birthYear(value) };
 });
 </script>
@@ -60,53 +60,69 @@ const derivedAge = computed(() => {
       <Card as="section" class="gap-5 p-6">
         <h2>{{ he.sections.name }}</h2>
         <div class="grid gap-4 sm:grid-cols-[minmax(8rem,0.7fr)_1fr_1fr]">
-          <FormField v-slot="{ id, describedBy, invalid }" :label="he.fields.title" :error="errorText(Field.Title)">
+          <LabeledField
+            v-slot="{ id, describedBy, invalid }"
+            :label="he.fields.title"
+            :error="errorText(FormField.Title)"
+          >
             <OptionCombobox
               :id="id"
-              v-model="form[Field.Title]"
+              v-model="form[FormField.Title]"
               :options="TITLES"
               :text="he.title"
               :described-by="describedBy"
               :invalid="invalid"
               :disabled="disabled"
             />
-          </FormField>
-          <FormField v-slot="{ id, describedBy, invalid }" :label="he.fields.first" :error="errorText(Field.First)">
+          </LabeledField>
+          <LabeledField
+            v-slot="{ id, describedBy, invalid }"
+            :label="he.fields.first"
+            :error="errorText(FormField.First)"
+          >
             <Input
               :id="id"
-              v-model="form[Field.First]"
+              v-model="form[FormField.First]"
               dir="auto"
               autocomplete="off"
               spellcheck="false"
               required
-              :maxlength="FIELD_MAX_LENGTH[Field.First]"
+              :maxlength="FIELD_MAX_LENGTH[FormField.First]"
               :aria-invalid="invalid || undefined"
               :aria-describedby="describedBy"
             />
-          </FormField>
-          <FormField v-slot="{ id, describedBy, invalid }" :label="he.fields.last" :error="errorText(Field.Last)">
+          </LabeledField>
+          <LabeledField
+            v-slot="{ id, describedBy, invalid }"
+            :label="he.fields.last"
+            :error="errorText(FormField.Last)"
+          >
             <Input
               :id="id"
-              v-model="form[Field.Last]"
+              v-model="form[FormField.Last]"
               dir="auto"
               autocomplete="off"
               spellcheck="false"
               required
-              :maxlength="FIELD_MAX_LENGTH[Field.Last]"
+              :maxlength="FIELD_MAX_LENGTH[FormField.Last]"
               :aria-invalid="invalid || undefined"
               :aria-describedby="describedBy"
             />
-          </FormField>
+          </LabeledField>
         </div>
       </Card>
 
       <div class="grid gap-5 lg:grid-cols-3">
         <Card as="section" class="gap-4 p-6">
           <h2>{{ he.sections.personal }}</h2>
-          <FormField v-slot="{ id, describedBy, invalid }" :label="he.fields.gender" :error="errorText(Field.Gender)">
+          <LabeledField
+            v-slot="{ id, describedBy, invalid }"
+            :label="he.fields.gender"
+            :error="errorText(FormField.Gender)"
+          >
             <NativeSelect
               :id="id"
-              v-model="form[Field.Gender]"
+              v-model="form[FormField.Gender]"
               required
               :aria-invalid="invalid || undefined"
               :aria-describedby="describedBy"
@@ -115,15 +131,15 @@ const derivedAge = computed(() => {
                 {{ he.genders[gender] }}
               </NativeSelectOption>
             </NativeSelect>
-          </FormField>
-          <FormField
+          </LabeledField>
+          <LabeledField
             v-slot="{ id, describedBy, invalid }"
             :label="he.fields.dateOfBirth"
-            :error="errorText(Field.DateOfBirth)"
+            :error="errorText(FormField.DateOfBirth)"
           >
             <Input
               :id="id"
-              v-model="form[Field.DateOfBirth]"
+              v-model="form[FormField.DateOfBirth]"
               type="date"
               dir="ltr"
               required
@@ -132,7 +148,7 @@ const derivedAge = computed(() => {
               :aria-invalid="invalid || undefined"
               :aria-describedby="describedBy"
             />
-          </FormField>
+          </LabeledField>
           <dl v-if="derivedAge" class="grid grid-cols-2 gap-3">
             <div>
               <dt class="text-muted-foreground text-sm">{{ he.labels.age }}</dt>
@@ -148,14 +164,14 @@ const derivedAge = computed(() => {
         <Card as="section" class="gap-4 p-6">
           <h2>{{ he.sections.address }}</h2>
           <div class="grid grid-cols-[7.5rem_1fr] gap-3">
-            <FormField
+            <LabeledField
               v-slot="{ id, describedBy, invalid }"
               :label="he.fields.streetNumber"
-              :error="errorText(Field.StreetNumber)"
+              :error="errorText(FormField.StreetNumber)"
             >
               <Input
                 :id="id"
-                v-model="form[Field.StreetNumber]"
+                v-model="form[FormField.StreetNumber]"
                 inputmode="numeric"
                 dir="ltr"
                 autocomplete="off"
@@ -163,96 +179,112 @@ const derivedAge = computed(() => {
                 :aria-invalid="invalid || undefined"
                 :aria-describedby="describedBy"
               />
-            </FormField>
-            <FormField
+            </LabeledField>
+            <LabeledField
               v-slot="{ id, describedBy, invalid }"
               :label="he.fields.streetName"
-              :error="errorText(Field.StreetName)"
+              :error="errorText(FormField.StreetName)"
             >
               <Input
                 :id="id"
-                v-model="form[Field.StreetName]"
+                v-model="form[FormField.StreetName]"
                 dir="auto"
                 autocomplete="off"
                 required
-                :maxlength="FIELD_MAX_LENGTH[Field.StreetName]"
+                :maxlength="FIELD_MAX_LENGTH[FormField.StreetName]"
                 :aria-invalid="invalid || undefined"
                 :aria-describedby="describedBy"
               />
-            </FormField>
+            </LabeledField>
           </div>
-          <FormField v-slot="{ id, describedBy, invalid }" :label="he.fields.city" :error="errorText(Field.City)">
-            <Input
-              :id="id"
-              v-model="form[Field.City]"
-              dir="auto"
-              autocomplete="off"
-              required
-              :maxlength="FIELD_MAX_LENGTH[Field.City]"
-              :aria-invalid="invalid || undefined"
-              :aria-describedby="describedBy"
-            />
-          </FormField>
-          <FormField
+          <LabeledField
             v-slot="{ id, describedBy, invalid }"
-            :label="he.fields.state"
-            :note="he.labels.optional"
-            :error="errorText(Field.State)"
+            :label="he.fields.city"
+            :error="errorText(FormField.City)"
           >
             <Input
               :id="id"
-              v-model="form[Field.State]"
+              v-model="form[FormField.City]"
               dir="auto"
               autocomplete="off"
-              :maxlength="FIELD_MAX_LENGTH[Field.State]"
+              required
+              :maxlength="FIELD_MAX_LENGTH[FormField.City]"
               :aria-invalid="invalid || undefined"
               :aria-describedby="describedBy"
             />
-          </FormField>
-          <FormField v-slot="{ id, describedBy, invalid }" :label="he.fields.country" :error="errorText(Field.Country)">
+          </LabeledField>
+          <LabeledField
+            v-slot="{ id, describedBy, invalid }"
+            :label="he.fields.state"
+            :note="he.labels.optional"
+            :error="errorText(FormField.State)"
+          >
+            <Input
+              :id="id"
+              v-model="form[FormField.State]"
+              dir="auto"
+              autocomplete="off"
+              :maxlength="FIELD_MAX_LENGTH[FormField.State]"
+              :aria-invalid="invalid || undefined"
+              :aria-describedby="describedBy"
+            />
+          </LabeledField>
+          <LabeledField
+            v-slot="{ id, describedBy, invalid }"
+            :label="he.fields.country"
+            :error="errorText(FormField.Country)"
+          >
             <OptionCombobox
               :id="id"
-              v-model="form[Field.Country]"
+              v-model="form[FormField.Country]"
               :options="COUNTRIES"
               :text="he.country"
               :described-by="describedBy"
               :invalid="invalid"
               :disabled="disabled"
             />
-          </FormField>
+          </LabeledField>
         </Card>
 
         <Card as="section" class="gap-4 p-6">
           <h2>{{ he.sections.contact }}</h2>
-          <FormField v-slot="{ id, describedBy, invalid }" :label="he.fields.email" :error="errorText(Field.Email)">
+          <LabeledField
+            v-slot="{ id, describedBy, invalid }"
+            :label="he.fields.email"
+            :error="errorText(FormField.Email)"
+          >
             <Input
               :id="id"
-              v-model="form[Field.Email]"
+              v-model="form[FormField.Email]"
               type="email"
               inputmode="email"
               dir="ltr"
               autocomplete="off"
               spellcheck="false"
               required
-              :maxlength="FIELD_MAX_LENGTH[Field.Email]"
+              :maxlength="FIELD_MAX_LENGTH[FormField.Email]"
               :aria-invalid="invalid || undefined"
               :aria-describedby="describedBy"
             />
-          </FormField>
-          <FormField v-slot="{ id, describedBy, invalid }" :label="he.fields.phone" :error="errorText(Field.Phone)">
+          </LabeledField>
+          <LabeledField
+            v-slot="{ id, describedBy, invalid }"
+            :label="he.fields.phone"
+            :error="errorText(FormField.Phone)"
+          >
             <Input
               :id="id"
-              v-model="form[Field.Phone]"
+              v-model="form[FormField.Phone]"
               type="tel"
               inputmode="tel"
               dir="ltr"
               autocomplete="off"
               required
-              :maxlength="FIELD_MAX_LENGTH[Field.Phone]"
+              :maxlength="FIELD_MAX_LENGTH[FormField.Phone]"
               :aria-invalid="invalid || undefined"
               :aria-describedby="describedBy"
             />
-          </FormField>
+          </LabeledField>
         </Card>
       </div>
     </fieldset>

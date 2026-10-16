@@ -52,7 +52,7 @@ src/
   api/              fetch wrapper (timeouts, cancellation, typed errors), randomuser.me adapter, profiles API
   components/
     ui/             shadcn-vue primitives (Button, Card, Badge, Input, AlertDialog...), owned and themed here
-    common/         StatusMessage, ConfirmDialog, FormField (label + error wiring), OptionCombobox (searchable closed list)
+    common/         StatusMessage, ConfirmDialog, LabeledField (label + error wiring), OptionCombobox (searchable closed list)
     brand/          the Profinq logo as an inline SVG component
     layout/         header and the About section
     decor/          the fanned cards on Home
@@ -90,5 +90,5 @@ Layout uses logical CSS properties (`margin-inline-start`, `ps-*`, `pe-*`) throu
 - Rubik is self-hosted as a variable font, and per-script unicode ranges mean the browser downloads only the scripts a page uses.
 - The logo is a 3 KB inline SVG. Thumbnails load lazily with fixed sizes, so nothing shifts, and the Screen 3 portrait loads first.
 - Superseded randomuser.me requests are cancelled, and concurrent loads of the saved list share one request.
-- History loads 20 profiles at a time ("Show more" follows the server's cursor). Screen 1 marks saved people with one batched `?ids=` request, not by loading the whole history.
+- History loads 20 profiles at a time ("Show more" follows the server's cursor), and its filter runs on the server (typing is debounced 250 ms), so it covers every saved profile, not just the loaded pages. Screen 1 marks saved people with one batched `?ids=` request, not by loading the whole history.
 - The production build ships a strict Content-Security-Policy (`script-src 'self'`, images and connections only to this site and randomuser.me). Every API response is validated with zod, and nothing is rendered with `v-html`.

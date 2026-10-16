@@ -141,13 +141,6 @@ async function onUpdate(): Promise<void> {
   padding-block-end: var(--space-8);
 }
 
-.not-found {
-  display: grid;
-  justify-items: start;
-  gap: var(--space-4);
-  padding-block: var(--space-8);
-}
-
 @media (max-width: 560px) {
   .hero-band {
     padding-block: var(--space-6) var(--space-8);

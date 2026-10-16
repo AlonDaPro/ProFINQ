@@ -11,12 +11,6 @@ export enum FilterQueryKey {
   Country = 'country',
 }
 
-/** A profile paired with its normalized name, so normalization runs once per data change, not per keystroke. */
-export interface SearchEntry<T extends Profile> {
-  profile: T;
-  searchableName: string;
-}
-
 export const EMPTY_FILTER: Readonly<ProfileFilter> = Object.freeze({ name: '', country: '' });
 
 const WHITESPACE = /\s+/;
@@ -36,27 +30,26 @@ function tokenize(value: string): string[] {
     .filter((token) => token.length > 0);
 }
 
-export function isFilterActive(filter: ProfileFilter): boolean {
-  return filter.name.trim().length > 0 || filter.country.length > 0;
+/** Whitespace around the name does not make a different filter. */
+export function sameFilter(a: ProfileFilter, b: ProfileFilter): boolean {
+  return a.name.trim() === b.name.trim() && a.country === b.country;
 }
 
-export function buildSearchIndex<T extends Profile>(profiles: readonly T[]): SearchEntry<T>[] {
-  return profiles.map((profile) => ({ profile, searchableName: normalizeForSearch(formatFullName(profile.name)) }));
+export function isFilterActive(filter: ProfileFilter): boolean {
+  return filter.name.trim().length > 0 || filter.country.length > 0;
 }
 
 /**
  * Every typed word must appear somewhere in the full name, in any order:
  * "smith john" and "john smith" both match "Mr John Smith".
  */
-export function filterProfiles<T extends Profile>(index: readonly SearchEntry<T>[], filter: ProfileFilter): T[] {
+export function filterProfiles<T extends Profile>(profiles: readonly T[], filter: ProfileFilter): T[] {
   const nameTokens = tokenize(filter.name);
-  const { country } = filter;
-  const matches: T[] = [];
-  for (const { profile, searchableName } of index) {
-    if (country && profile.location.country !== country) continue;
-    if (nameTokens.every((token) => searchableName.includes(token))) matches.push(profile);
-  }
-  return matches;
+  return profiles.filter((profile) => {
+    if (filter.country && profile.location.country !== filter.country) return false;
+    const searchableName = normalizeForSearch(formatFullName(profile.name));
+    return nameTokens.every((token) => searchableName.includes(token));
+  });
 }
 
 export function distinctCountries(profiles: readonly Profile[]): string[] {

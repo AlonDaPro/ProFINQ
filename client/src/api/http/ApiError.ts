@@ -1,7 +1,7 @@
 import type { HttpStatus } from '@/constants/http';
 
 /** One field-level problem from the server's error envelope, e.g. `{ path: 'body.email', message }`. */
-export interface ApiErrorDetail {
+interface ApiErrorDetail {
   path: string;
   message: string;
 }
