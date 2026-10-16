@@ -119,12 +119,16 @@ describe('database', () => {
   async function queryPlan(sql: string, params: unknown[] = []): Promise<string> {
     const client = await pool.connect();
     try {
-      // On a near-empty table a sequential scan is cheaper; disable it to see which index the planner picks.
+      // Plans follow table statistics, which differ between a fresh CI database and a long-lived one.
+      // Ruling out the sequential scan and the sort the planner may prefer on a tiny table asks what
+      // these tests care about: can an index deliver these rows, in this order, at all?
       await client.query('SET enable_seqscan = off');
+      await client.query('SET enable_sort = off');
       const { rows } = await client.query<{ 'QUERY PLAN': string }>(`EXPLAIN ${sql}`, params);
       return rows.map((row) => row['QUERY PLAN']).join('\n');
     } finally {
       await client.query('RESET enable_seqscan');
+      await client.query('RESET enable_sort');
       client.release();
     }
   }
