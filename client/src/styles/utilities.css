@@ -1,0 +1,33 @@
+.page-width {
+  max-width: var(--content-width);
+  margin-inline: auto;
+  padding-inline: var(--space-5);
+}
+
+/* A full-width pastel band with a fine grain, used once per page for its hero. */
+.band {
+  position: relative;
+  isolation: isolate;
+  background: linear-gradient(
+    135deg,
+    var(--color-lavender-50),
+    var(--color-lavender-200) 70%,
+    var(--color-lavender-400)
+  );
+}
+
+.band::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: url('/grain.svg');
+  opacity: 0.12;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+/* An icon that points along the reading direction (e.g. "back") mirrors in RTL. */
+.icon-directional:dir(rtl) {
+  transform: scaleX(-1);
+}

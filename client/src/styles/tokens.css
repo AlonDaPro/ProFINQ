@@ -1,0 +1,71 @@
+/*
+ * Design tokens, modelled on finqai.co.il: ink on white, black pill actions, and soft
+ * pastel bands (lavender, mint, gold) with a fine grain, used only for page heroes.
+ * Layout uses logical properties throughout, so the same CSS mirrors for RTL.
+ */
+:root {
+  /* Color */
+  --color-ink: #222222;
+  --color-ink-muted: #5f5f6b;
+  --color-paper: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f7f6fb;
+  --color-line: #e8e6ef;
+  --color-line-strong: #cfccd9;
+  --color-brand: #5600ca;
+  --color-lavender-50: #f5f0ff;
+  --color-lavender-200: #e4d7ff;
+  --color-lavender-400: #cdb6ff;
+  --color-mint-200: #d3f0d8;
+  --color-mint-400: #a6dcb3;
+  --color-gold-200: #f6e4b9;
+  --color-gold-400: #e2b866;
+  --color-danger: #b4232a;
+  --color-danger-soft: #fdecec;
+  --color-success: #1d7044;
+  --color-success-soft: #e3f4e8;
+  --color-backdrop: rgb(34 34 34 / 40%);
+
+  /* Type: Rubik draws Latin, Hebrew and Arabic script in one voice. */
+  --font-sans: 'Rubik Variable', system-ui, sans-serif;
+  --text-xs: 0.8125rem;
+  --text-sm: 0.875rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.75rem;
+  --text-2xl: 2.5rem;
+  --text-3xl: 3.5rem;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --leading-tight: 1.15;
+  --leading-normal: 1.55;
+
+  /* Space */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 2.5rem;
+  --space-8: 3rem;
+  --space-9: 4.5rem;
+
+  /* Shape: pills for actions and tags, soft radii for cards. Tailwind's rounded-* utilities read these too. */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgb(34 34 34 / 4%), 0 12px 32px -12px rgb(60 40 120 / 16%);
+  --shadow-lift: 0 2px 6px rgb(34 34 34 / 6%), 0 28px 56px -20px rgb(60 40 120 / 30%);
+
+  /* Layout */
+  --content-width: 1160px;
+  --document-width: 1040px;
+  --thumbnail-size: 44px;
+
+  /* Motion */
+  --duration-fast: 140ms;
+  --duration-pop: 320ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+}

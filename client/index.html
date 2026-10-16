@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Profinq: meet ten random people and keep the ones you like." />
+    <meta name="theme-color" content="#ffffff" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!--
+      randomuser.me serves both the API (a CORS fetch) and the portraits (no-cors <img>).
+      Browsers keep those in separate connection pools, so each needs its own preconnect.
+    -->
+    <link rel="preconnect" href="https://randomuser.me" crossorigin />
+    <link rel="preconnect" href="https://randomuser.me" />
+    <title>Profinq</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
