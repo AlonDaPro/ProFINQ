@@ -1,9 +1,9 @@
-import type { Pool } from 'pg';
+import pg, { type Pool } from 'pg';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { createApp } from '../src/app.js';
 import { runMigrations } from '../src/db/migrate.js';
-import { buildProfile, createTestApp, createTestContext } from './helpers.js';
+import { buildProfile, createTestApp, createTestContext, testDatabaseUrl } from './helpers.js';
 
 let pool: Pool;
 let app: ReturnType<typeof createApp>;
@@ -82,16 +82,37 @@ describe('rate limiting', () => {
     await request(limitedApp).get('/api/profiles').expect(200);
   });
 
-  it('never throttles the health check', async () => {
+  it('counts the health check as a read, since it queries the database', async () => {
     const limitedApp = createTestApp(pool, { readsPerMinute: 1, writesPerMinute: 1 });
 
-    for (let attempt = 0; attempt < 3; attempt++) await request(limitedApp).get('/api/health').expect(200);
+    await request(limitedApp).get('/api/health').expect(200);
+    await request(limitedApp).get('/api/health').expect(429);
+  });
+
+  it('counts a write before parsing its body, so a malformed flood is refused too', async () => {
+    const limitedApp = createTestApp(pool, { readsPerMinute: 1, writesPerMinute: 1 });
+    const malformed = () =>
+      request(limitedApp).post('/api/profiles').set('Content-Type', 'application/json').send('{"broken"');
+
+    await malformed().expect(400);
+    await malformed().expect(429);
   });
 });
 
 describe('database', () => {
   it('is idempotent when migrations run again', async () => {
     await expect(runMigrations(pool)).resolves.toEqual([]);
+  });
+
+  it('gives every new connection a statement timeout, without sending it on connect (poolers reject that)', async () => {
+    const client = new pg.Client({ connectionString: testDatabaseUrl() });
+    await client.connect();
+    try {
+      const { rows } = await client.query<{ statement_timeout: string }>('SHOW statement_timeout');
+      expect(rows[0]?.statement_timeout).toBe('10s');
+    } finally {
+      await client.end();
+    }
   });
 
   /** EXPLAIN on one checked-out client: SET is per connection. */

@@ -1,16 +1,14 @@
 import 'dotenv/config';
-import { createApp } from './app.js';
+import { composeApp } from './compose.js';
 import { loadConfig } from './config/env.js';
 import { runMigrations } from './db/migrate.js';
-import { checkDatabaseHealth, createPool, waitForDatabase } from './db/pool.js';
+import { DATABASE_STARTUP_RETRY, waitForDatabase } from './db/pool.js';
 import { consoleLogger as logger } from './logger.js';
-import { PostgresProfileRepository } from './repositories/postgresProfileRepository.js';
-import { ProfileService } from './services/profileService.js';
+
+// The long-running server (local development, Docker, any VM). On Vercel, src/serverless.ts is the entry.
 
 /** In-flight requests get this long to finish after SIGTERM before the process is killed. */
 const SHUTDOWN_GRACE_MS = 10_000;
-/** `docker compose up` returns before Postgres accepts connections, so startup retries briefly (~10 s). */
-const DATABASE_STARTUP_RETRY = { attempts: 10, delayMs: 1_000 } as const;
 const SHUTDOWN_SIGNALS: readonly NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
 
 enum ExitCode {
@@ -20,13 +18,7 @@ enum ExitCode {
 
 async function main(): Promise<void> {
   const config = loadConfig();
-  const pool = createPool({
-    connectionString: config.DATABASE_URL,
-    maxConnections: config.DB_POOL_SIZE,
-    onIdleClientError: (error) => {
-      logger.error('Idle PostgreSQL client error', error);
-    },
-  });
+  const { app, pool } = composeApp(config, logger);
 
   await waitForDatabase(pool, DATABASE_STARTUP_RETRY);
   const appliedVersions = await runMigrations(pool);
@@ -34,19 +26,12 @@ async function main(): Promise<void> {
     logger.info('Applied database migrations', { versions: appliedVersions });
   }
 
-  const app = createApp({
-    profileService: new ProfileService(new PostgresProfileRepository(pool)),
-    checkDatabaseHealth: () => checkDatabaseHealth(pool),
-    corsOrigins: config.CORS_ORIGINS,
-    rateLimits: {
-      readsPerMinute: config.RATE_LIMIT_READS_PER_MINUTE,
-      writesPerMinute: config.RATE_LIMIT_WRITES_PER_MINUTE,
-    },
-    trustProxyHops: config.TRUST_PROXY_HOPS,
-    logger,
-  });
-
-  const server = app.listen(config.PORT, () => {
+  // Express 5 hands listen errors (e.g. EADDRINUSE) to this callback instead of throwing.
+  const server = app.listen(config.PORT, (error?: Error) => {
+    if (error) {
+      logger.error('Failed to start listening', error);
+      process.exit(ExitCode.Failure);
+    }
     logger.info('Profinq API listening', { address: server.address() });
   });
 

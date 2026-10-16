@@ -1,4 +1,5 @@
 export enum ApiPath {
+  Root = '/api',
   Health = '/api/health',
   Profiles = '/api/profiles',
 }
@@ -21,3 +22,5 @@ export const DEFAULT_PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 100;
 /** Most ids a single ?ids= lookup may ask about (one random batch is 10). */
 export const MAX_IDS_PER_LOOKUP = 100;
+/** A real cursor is about 100 characters; anything far longer is not one. */
+export const MAX_CURSOR_LENGTH = 512;

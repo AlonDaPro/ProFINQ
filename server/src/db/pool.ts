@@ -6,8 +6,6 @@ pg.types.setTypeParser(pg.types.builtins.DATE, (value) => value);
 
 const CONNECTION_TIMEOUT_MS = 5_000;
 const IDLE_TIMEOUT_MS = 30_000;
-/** A runaway query is killed by Postgres instead of holding a pooled connection forever. */
-const STATEMENT_TIMEOUT_MS = 10_000;
 const HEALTH_CHECK_QUERY = 'SELECT 1';
 
 /** Errors that mean "the database is unreachable right now" (→ 503), not "the request is wrong". */
@@ -27,12 +25,15 @@ const UNAVAILABLE_ERROR_CODES: ReadonlySet<string> = new Set(Object.values(Unava
 /** node-postgres reports these failures only through the message, without a code. */
 const UNAVAILABLE_ERROR_MESSAGES = ['timeout exceeded when trying to connect', 'Connection terminated'] as const;
 
-export interface RetryOptions {
+interface RetryOptions {
   attempts: number;
   delayMs: number;
 }
 
-export interface PoolOptions {
+/** `docker compose up` returns before Postgres accepts connections, so startup retries briefly (~10 s). */
+export const DATABASE_STARTUP_RETRY: Readonly<RetryOptions> = { attempts: 10, delayMs: 1_000 };
+
+interface PoolOptions {
   connectionString: string;
   maxConnections: number;
   onIdleClientError: (error: Error) => void;
@@ -44,7 +45,6 @@ export function createPool({ connectionString, maxConnections, onIdleClientError
     max: maxConnections,
     connectionTimeoutMillis: CONNECTION_TIMEOUT_MS,
     idleTimeoutMillis: IDLE_TIMEOUT_MS,
-    statement_timeout: STATEMENT_TIMEOUT_MS,
   });
   // Without a listener, an idle client dropped by the server (DB restart,
   // network blip) emits an unhandled 'error' event and crashes the process.

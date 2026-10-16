@@ -4,6 +4,7 @@ import { migrations as defaultMigrations, type Migration } from './migrations.js
 // Arbitrary constant shared by every instance of this service; holding it makes
 // concurrent startups (e.g. several replicas) apply migrations one at a time.
 const MIGRATION_LOCK_KEY = 728_461_903;
+const MIGRATION_LOCK_TIMEOUT = '30s';
 
 export async function runMigrations(
   pool: Pool,
@@ -12,8 +13,10 @@ export async function runMigrations(
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    // The pool's 10 s statement timeout must not kill a replica waiting for the lock or a long DDL.
+    // The role's 10 s statement timeout (migration 2) must not kill a deploy waiting for the lock or a long DDL.
     await client.query('SET LOCAL statement_timeout = 0');
+    // ...but a deploy must fail, not hang, if another migration holds the lock for too long.
+    await client.query(`SET LOCAL lock_timeout = '${MIGRATION_LOCK_TIMEOUT}'`);
     await client.query('SELECT pg_advisory_xact_lock($1)', [MIGRATION_LOCK_KEY]);
     await client.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (

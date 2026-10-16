@@ -40,4 +40,19 @@ export const migrations: readonly Migration[] = [
       CREATE INDEX profiles_saved_at_id_idx ON profiles (saved_at DESC, id DESC);
     `,
   },
+  {
+    version: 2,
+    name: 'statement_timeout',
+    // A runaway query is killed by Postgres instead of holding a pooled connection forever. Set as
+    // this role's default in this database, not sent on connect: connection poolers such as
+    // PgBouncer (Neon's pooled URL) reject statement_timeout as a startup parameter.
+    sql: `
+      DO $$
+      BEGIN
+        EXECUTE format('ALTER ROLE %I IN DATABASE %I SET statement_timeout = %L',
+                       current_user, current_database(), '10s');
+      END
+      $$;
+    `,
+  },
 ];

@@ -13,7 +13,7 @@ const silentLogger: Logger = { info: () => undefined, error: () => undefined };
 
 const DEFAULT_TEST_DATABASE_URL = 'postgres://profiles:profiles@localhost:5432/profiles_test';
 
-function testDatabaseUrl(): string {
+export function testDatabaseUrl(): string {
   const url = process.env.TEST_DATABASE_URL ?? DEFAULT_TEST_DATABASE_URL;
   const databaseName = new URL(url).pathname.slice(1);
   // The suite truncates tables; refuse to run against anything not clearly a test DB.

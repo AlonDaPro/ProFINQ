@@ -59,13 +59,11 @@ If port 5432 is taken, start the database with `POSTGRES_PORT=5433 docker compos
 
 ## Deploy to Vercel
 
-`vercel.json` deploys both packages as one Vercel project with two [services](https://vercel.com/docs/services) on one domain: `client` (the Vite build) serves every path, and `server` (Express, as a Vercel Function) serves `/api/*`. The browser calls the API on the same origin, so no CORS setup is needed.
+`vercel.json` deploys both packages as one Vercel project with two [services](https://vercel.com/docs/services) on one domain: `client` (the Vite build) serves every path, and `server` (Express, as a Vercel Function from `server/src/serverless.ts`) serves `/api/*`. The browser calls the API on the same origin, so no CORS setup is needed.
 
-1. Import the repository in Vercel (or run `vercel deploy`).
-2. Add a Postgres database from the Vercel Marketplace (Neon); it sets `DATABASE_URL`. The tables are created on the API's first start.
-3. Set `TRUST_PROXY_HOPS=1` on the project, so rate limits see the real client IP behind Vercel's proxy.
-
-`vercel dev` runs both services locally the same way.
+1. Import the repository in Vercel.
+2. Add a Postgres database from the Vercel Marketplace (Neon); it sets `DATABASE_URL`. Do this before the first deploy: the server's build step (`npm run migrate`) applies the migrations, once per deploy rather than on every cold start.
+3. Set `TRUST_PROXY_HOPS=1`, so rate limits see the real client IP behind Vercel's proxy, and optionally `DB_POOL_SIZE=3`: every function instance has its own pool.
 
 ## Architecture
 

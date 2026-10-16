@@ -28,11 +28,13 @@ export function createApp(dependencies: AppDependencies): Express {
   app.set('trust proxy', trustProxyHops);
   app.use(securityHeaders);
   app.use(cors({ origin: [...corsOrigins], maxAge: CORS_PREFLIGHT_MAX_AGE_SECONDS }));
+  // Before body parsing, so a flood is counted (and refused) without parsing a single body. The
+  // health check is included: it queries the database, so it must not be a free way to load it.
+  app.use(ApiPath.Root, ...createRateLimiters(rateLimits));
   app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
 
-  // Health checks stay unlimited, so a load balancer probing often is never throttled.
   app.use(ApiPath.Health, createHealthRouter(checkDatabaseHealth, logger));
-  app.use(ApiPath.Profiles, ...createRateLimiters(rateLimits), createProfilesRouter(profileService));
+  app.use(ApiPath.Profiles, createProfilesRouter(profileService));
   app.use(notFoundHandler);
   app.use(createErrorHandler(logger));
 
