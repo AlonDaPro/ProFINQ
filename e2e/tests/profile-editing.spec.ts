@@ -253,6 +253,22 @@ test.describe('Screen 2: pagination', () => {
     await expect(profileRows(page).first()).toContainText('seed24@example.com');
   });
 
+  test('filters History on the server, so it finds people beyond the loaded page', async ({ page, request }) => {
+    await seedSavedProfiles(request, 25);
+
+    await page.goto('/saved');
+    await expect(profileRows(page)).toHaveCount(20);
+    // seed-000 is the oldest, so it is not on the first page; only a server-side filter can find it.
+    await page.getByRole('searchbox', { name: 'Name' }).fill('person a');
+
+    await expect(profileRows(page)).toHaveCount(1);
+    await expect(profileRows(page)).toContainText('seed0@example.com');
+    await expect(page).toHaveURL(/name=person\+a/);
+
+    await page.getByRole('combobox', { name: 'Country' }).selectOption('Israel');
+    await expect(profileRows(page)).toHaveCount(1);
+  });
+
   test('marks rows of a new random batch that are already in the database', async ({ page }) => {
     await saveNoaLevi(page);
 

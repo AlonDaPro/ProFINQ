@@ -36,8 +36,6 @@ export const he = {
   country: 'ארץ',
   email: 'דוא״ל',
   phone: 'טלפון',
-  age: 'גיל',
-  female: 'נקבה',
   required: 'שדה חובה',
   invalidEmail: 'כתובת דוא״ל לא תקינה',
   invalidPhone: 'מספר טלפון לא תקין',
