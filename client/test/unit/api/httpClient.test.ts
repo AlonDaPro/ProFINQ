@@ -18,6 +18,27 @@ describe('requestJson', () => {
     await expect(requestJson('/api/x', anySchema)).rejects.toMatchObject({ message: 'Nope', status: 409 });
   });
 
+  it('carries the field details of a validation error, and names them in the message', async () => {
+    const details = [{ path: 'body.email', message: 'Invalid email' }];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          Response.json(
+            { error: { code: 'VALIDATION_FAILED', message: 'Request validation failed', details } },
+            { status: 400 },
+          ),
+        ),
+      ),
+    );
+
+    await expect(requestJson('/api/x', anySchema)).rejects.toMatchObject({
+      status: 400,
+      details,
+      message: 'Request validation failed (body.email: Invalid email)',
+    });
+  });
+
   it('keeps caller cancellation an AbortError even when it lands while the body is read', async () => {
     const controller = new AbortController();
     const abortError = new DOMException('Aborted', 'AbortError');

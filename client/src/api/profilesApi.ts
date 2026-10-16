@@ -2,16 +2,38 @@ import { z } from 'zod';
 import { requestJson, requestNoContent } from '@/api/http';
 import { PROFILES_ENDPOINT } from '@/constants/api';
 import { HttpMethod } from '@/constants/http';
-import { savedProfileSchema, type Profile, type ProfileName, type SavedProfile } from '@/domain/profile';
+import { savedProfileSchema, type Profile, type ProfileDetails, type SavedProfile } from '@/domain/profile';
 
-const profileListSchema = z.object({ profiles: z.array(savedProfileSchema) });
+const profilePageSchema = z.object({
+  profiles: z.array(savedProfileSchema),
+  nextCursor: z.string().nullable(),
+});
+
+export type ProfilePage = z.infer<typeof profilePageSchema>;
+
+export enum ProfileQueryParam {
+  Cursor = 'cursor',
+  Ids = 'ids',
+}
 
 function profileUrl(id: string): string {
   return `${PROFILES_ENDPOINT}/${encodeURIComponent(id)}`;
 }
 
-export async function listSavedProfiles(): Promise<SavedProfile[]> {
-  const { profiles } = await requestJson(PROFILES_ENDPOINT, profileListSchema);
+function listUrl(params: Partial<Record<ProfileQueryParam, string>>): string {
+  const query = new URLSearchParams(params).toString();
+  return query ? `${PROFILES_ENDPOINT}?${query}` : PROFILES_ENDPOINT;
+}
+
+/** One page of saved profiles, newest first. Pass the previous page's `nextCursor` to continue. */
+export function listSavedProfiles(cursor?: string): Promise<ProfilePage> {
+  return requestJson(listUrl(cursor ? { [ProfileQueryParam.Cursor]: cursor } : {}), profilePageSchema);
+}
+
+/** The saved profiles among `ids` (one request, however many pages the list has). */
+export async function findSavedProfiles(ids: readonly string[]): Promise<SavedProfile[]> {
+  if (ids.length === 0) return [];
+  const { profiles } = await requestJson(listUrl({ [ProfileQueryParam.Ids]: ids.join(',') }), profilePageSchema);
   return profiles;
 }
 
@@ -23,8 +45,9 @@ export function createSavedProfile(profile: Profile): Promise<SavedProfile> {
   return requestJson(PROFILES_ENDPOINT, savedProfileSchema, { method: HttpMethod.Post, body: profile });
 }
 
-export function renameSavedProfile(id: string, name: ProfileName): Promise<SavedProfile> {
-  return requestJson(profileUrl(id), savedProfileSchema, { method: HttpMethod.Patch, body: { name } });
+/** Replaces every editable field (the server's PUT takes the complete details). */
+export function updateSavedProfile(id: string, details: ProfileDetails): Promise<SavedProfile> {
+  return requestJson(profileUrl(id), savedProfileSchema, { method: HttpMethod.Put, body: details });
 }
 
 export function deleteSavedProfile(id: string): Promise<void> {

@@ -15,9 +15,12 @@ interface RequestSignals {
   combined: AbortSignal;
 }
 
-/** The server's documented error envelope: `{ "error": { "code", "message" } }`. */
+/** The server's documented error envelope: `{ "error": { "code", "message", "details?" } }`. */
 const apiErrorBodySchema = z.object({
-  error: z.object({ message: z.string() }),
+  error: z.object({
+    message: z.string(),
+    details: z.array(z.object({ path: z.string(), message: z.string() })).optional(),
+  }),
 });
 
 const TIMEOUT_MESSAGE = 'The server took too long to respond';
@@ -45,7 +48,7 @@ function createSignals(caller?: AbortSignal): RequestSignals {
  */
 function transportError(error: unknown, signals: RequestSignals, fallback: string, status?: number): unknown {
   if (signals.caller?.aborted) return error;
-  return new ApiError(signals.timeout.aborted ? TIMEOUT_MESSAGE : fallback, status, { cause: error });
+  return new ApiError(signals.timeout.aborted ? TIMEOUT_MESSAGE : fallback, status, [], { cause: error });
 }
 
 async function send(url: string, { method = HttpMethod.Get, body }: RequestOptions, signals: RequestSignals) {
@@ -73,7 +76,12 @@ async function send(url: string, { method = HttpMethod.Get, body }: RequestOptio
 async function toHttpError(response: Response): Promise<ApiError> {
   try {
     const parsed = apiErrorBodySchema.safeParse(await response.json());
-    if (parsed.success) return new ApiError(parsed.data.error.message, response.status);
+    if (parsed.success) {
+      const { message, details = [] } = parsed.data.error;
+      // "Request validation failed (email: Invalid email)" reads well even where fields are not shown.
+      const summary = details.map((detail) => `${detail.path}: ${detail.message}`).join('; ');
+      return new ApiError(summary ? `${message} (${summary})` : message, response.status, details);
+    }
   } catch {
     // Non-JSON error bodies (proxies, HTML error pages) fall through to the generic message.
   }
@@ -96,7 +104,8 @@ export async function requestJson<T>(
   }
   const parsed = schema.safeParse(payload);
   if (!parsed.success) {
-    throw new ApiError('The server returned unexpected data', response.status, { cause: parsed.error });
+    // The zod error stays on `cause` for debugging; users get a plain sentence, not schema internals.
+    throw new ApiError('The server returned unexpected data', response.status, [], { cause: parsed.error });
   }
   return parsed.data;
 }

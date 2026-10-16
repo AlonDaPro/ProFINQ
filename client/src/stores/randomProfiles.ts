@@ -3,7 +3,7 @@ import { ref, shallowRef } from 'vue';
 import { errorMessage } from '@/api/http';
 import { fetchRandomProfiles } from '@/api/randomUser/randomUserApi';
 import { RANDOM_BATCH_SIZE } from '@/constants/app';
-import { normalizeName, type Profile, type ProfileName } from '@/domain/profile';
+import type { Profile, ProfileDetails } from '@/domain/profile';
 import { failed, IDLE, LOADING, SUCCESS, type AsyncState } from '@/types/asyncState';
 
 /**
@@ -23,7 +23,7 @@ export const useRandomProfilesStore = defineStore('randomProfiles', () => {
     const controller = new AbortController();
     inFlight = controller;
 
-    profiles.value = [];
+    // The current batch stays until the new one arrives: a failed fetch must not wipe it.
     state.value = LOADING;
     try {
       const batch = await fetchRandomProfiles(RANDOM_BATCH_SIZE, controller.signal);
@@ -42,13 +42,14 @@ export const useRandomProfilesStore = defineStore('randomProfiles', () => {
     return profiles.value.find((profile) => profile.id === id);
   }
 
-  /** Returns false when the profile is no longer in the current batch. */
-  function rename(id: string, name: ProfileName): boolean {
-    const profile = findById(id);
-    if (!profile) return false;
-    profile.name = normalizeName(name);
+  /** Replaces a profile's editable details in memory. Returns false when it is no longer in the batch. */
+  function update(id: string, details: ProfileDetails): boolean {
+    const index = profiles.value.findIndex((profile) => profile.id === id);
+    const current = profiles.value[index];
+    if (!current) return false;
+    profiles.value.splice(index, 1, { ...current, ...details });
     return true;
   }
 
-  return { profiles, state, fetchBatch, findById, rename };
+  return { profiles, state, fetchBatch, findById, update };
 });

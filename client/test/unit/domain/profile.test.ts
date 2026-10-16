@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { birthYear, calculateAge, formatFullName, namesEqual, validateName } from '@/domain/profile';
+import { birthYear, calculateAge, formatFullName, Title } from '@/domain/profile';
 import {
   buildSearchIndex,
   distinctCountries,
@@ -13,15 +13,15 @@ import { buildProfile } from '../../fixtures/profiles';
 const filter = (profiles: Profile[], criteria: ProfileFilter) => filterProfiles(buildSearchIndex(profiles), criteria);
 
 describe('filterProfiles', () => {
-  const john = buildProfile({ id: '1', name: { title: 'Mr', first: 'John', last: 'Smith' } });
+  const john = buildProfile({ id: '1', name: { title: Title.Mr, first: 'John', last: 'Smith' } });
   const jose = buildProfile({
     id: '2',
-    name: { title: 'Mr', first: 'José', last: 'García' },
+    name: { title: Title.Mr, first: 'José', last: 'García' },
     location: { ...john.location, country: 'Spain' },
   });
   const nima = buildProfile({
     id: '3',
-    name: { title: 'آقای', first: 'نیما', last: 'رضایی' },
+    name: { title: Title.Mr, first: 'نیما', last: 'رضایی' },
     location: { ...john.location, country: 'Iran' },
   });
   const all = [john, jose, nima];
@@ -57,42 +57,36 @@ describe('filterProfiles', () => {
 });
 
 describe('calculateAge', () => {
-  const dob = '1990-03-15T10:00:00.000Z';
+  const dob = '1990-03-15';
 
   it('has not had the birthday yet the day before', () => {
-    expect(calculateAge(dob, new Date('2026-03-14T23:00:00Z'))).toBe(35);
+    expect(calculateAge(dob, new Date(2026, 2, 14))).toBe(35);
   });
 
   it('counts the birthday on the day itself', () => {
-    expect(calculateAge(dob, new Date('2026-03-15T00:00:00Z'))).toBe(36);
+    expect(calculateAge(dob, new Date(2026, 2, 15))).toBe(36);
   });
 
   it('handles leap-day births in non-leap years', () => {
-    expect(calculateAge('2000-02-29T00:00:00Z', new Date('2026-02-28T12:00:00Z'))).toBe(25);
-    expect(calculateAge('2000-02-29T00:00:00Z', new Date('2026-03-01T00:00:00Z'))).toBe(26);
+    expect(calculateAge('2000-02-29', new Date(2026, 1, 28))).toBe(25);
+    expect(calculateAge('2000-02-29', new Date(2026, 2, 1))).toBe(26);
   });
 
-  it('reads the birth year in UTC', () => {
-    expect(birthYear('1990-12-31T23:30:00.000Z')).toBe(1990);
+  it('never goes negative', () => {
+    expect(calculateAge('2026-12-31', new Date(2026, 0, 1))).toBe(0);
+  });
+
+  it('reads the birth year straight from the calendar date, whatever the timezone', () => {
+    expect(birthYear('1990-12-31')).toBe(1990);
   });
 });
 
-describe('name helpers', () => {
-  it('formats a full name without stray spaces when the title is empty', () => {
-    expect(formatFullName({ title: '', first: 'Noa', last: 'Levi' })).toBe('Noa Levi');
+describe('formatFullName', () => {
+  it('joins title, first and last', () => {
+    expect(formatFullName({ title: Title.Dr, first: 'Noa', last: 'Levi' })).toBe('Dr Noa Levi');
   });
 
-  it('treats whitespace-only differences as equal', () => {
-    expect(namesEqual({ title: 'Ms', first: ' Noa', last: 'Levi ' }, { title: 'Ms', first: 'Noa', last: 'Levi' })).toBe(
-      true,
-    );
-  });
-
-  it('requires first and last names and caps lengths', () => {
-    expect(validateName({ title: '', first: '  ', last: 'x'.repeat(51) })).toEqual({
-      first: 'required',
-      last: 'tooLong',
-    });
-    expect(validateName({ title: 'Dr', first: 'A', last: 'B' })).toEqual({});
+  it('skips an empty title without leaving stray spaces', () => {
+    expect(formatFullName({ title: '', first: ' Noa', last: 'Levi ' })).toBe('Noa Levi');
   });
 });

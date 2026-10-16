@@ -1,10 +1,10 @@
-import type { Profile, SavedProfile } from '@/domain/profile';
+import { Gender, Title, type Profile, type SavedProfile } from '@/domain/profile';
 
 export function buildProfile(overrides: Partial<Profile> = {}): Profile {
   return {
     id: 'b1c2d3e4-0000-4000-8000-000000000001',
-    name: { title: 'Mr', first: 'John', last: 'Smith' },
-    gender: 'male',
+    name: { title: Title.Mr, first: 'John', last: 'Smith' },
+    gender: Gender.Male,
     email: 'john.smith@example.com',
     phone: '(272) 790-0888',
     picture: {
@@ -18,7 +18,7 @@ export function buildProfile(overrides: Partial<Profile> = {}): Profile {
       state: 'Michigan',
       country: 'United States',
     },
-    dateOfBirth: '1990-03-15T10:00:00.000Z',
+    dateOfBirth: '1990-03-15',
     ...overrides,
   };
 }

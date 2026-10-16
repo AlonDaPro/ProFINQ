@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/api/http';
-import { parseRandomUsers } from '@/api/randomUser/randomUser.mapper';
+import { parseRandomUsers, toCountry, toTitle } from '@/api/randomUser/randomUser.mapper';
+import { Gender, isCountry, Title } from '@/domain/profile';
 import { fetchRandomProfiles } from '@/api/randomUser/randomUserApi';
 import { rawRandomUser } from '../../fixtures/profiles';
 
@@ -10,8 +11,8 @@ describe('parseRandomUsers', () => {
 
     expect(profile).toEqual({
       id: 'uuid-1',
-      name: { title: 'Miss', first: 'Noa', last: 'Levi' },
-      gender: 'female',
+      name: { title: Title.Miss, first: 'Noa', last: 'Levi' },
+      gender: Gender.Female,
       email: 'noa.levi@example.com',
       phone: '04-123-4567',
       picture: {
@@ -25,7 +26,7 @@ describe('parseRandomUsers', () => {
         state: 'Haifa District',
         country: 'Israel',
       },
-      dateOfBirth: '1993-07-20T09:44:18.674Z',
+      dateOfBirth: '1993-07-20',
     });
   });
 
@@ -40,6 +41,30 @@ describe('parseRandomUsers', () => {
     ]);
 
     expect(profiles.map((profile) => profile.id)).toEqual(['ok-1', 'ok-2']);
+  });
+
+  it.each([
+    ['plain http', 'http://randomuser.me/api/portraits/women/2.jpg'],
+    ['another host', 'https://evil.example/pixel.gif'],
+    ['a look-alike host', 'https://randomuser.me.evil.example/2.jpg'],
+  ])('drops a record whose portrait is %s', (_label, url) => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const base = rawRandomUser('pic');
+    const picture = { ...(base.picture as object), large: url };
+
+    expect(parseRandomUsers([{ ...base, picture }])).toEqual([]);
+  });
+
+  it('drops a record with a gender outside the known set', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    expect(parseRandomUsers([rawRandomUser('g', { gender: 'unknown' })])).toEqual([]);
+  });
+
+  it('keeps the UTC calendar day of the birth date-time', () => {
+    const record = rawRandomUser('d', { dob: { date: '1990-01-01T23:30:00.000Z', age: 36 } });
+
+    expect(parseRandomUsers([record])[0]?.dateOfBirth).toBe('1990-01-01');
   });
 
   it('de-duplicates records that share a uuid', () => {
@@ -88,5 +113,62 @@ describe('fetchRandomProfiles', () => {
 
     await expect(fetchRandomProfiles(10)).rejects.toThrow('Could not reach the server');
     await expect(fetchRandomProfiles(10)).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe('toTitle', () => {
+  it.each([
+    ['Mr', Title.Mr],
+    [' Ms ', Title.Ms],
+    ['Monsieur', Title.Mr],
+    ['Madame', Title.Mrs],
+    ['Mademoiselle', Title.Miss],
+    ['Herr', ''],
+    ['', ''],
+    // Prototype keys must not leak through as titles.
+    ['constructor', ''],
+    ['toString', ''],
+  ])('maps %j to %j', (raw, expected) => {
+    expect(toTitle(raw)).toBe(expected);
+  });
+});
+
+describe('toCountry', () => {
+  it.each([
+    ['Israel', 'Israel'],
+    [' Norway ', 'Norway'],
+    ['Turkey', 'Türkiye'],
+    // Kept as sent, so the form flags it and the user picks a listed country.
+    ['Atlantis', 'Atlantis'],
+    ['constructor', 'constructor'],
+  ])('maps %j to %j', (raw, expected) => {
+    expect(toCountry(raw)).toBe(expected);
+  });
+
+  it('knows every country randomuser.me produces', () => {
+    const randomUserCountries = [
+      'Australia',
+      'Brazil',
+      'Canada',
+      'Denmark',
+      'Finland',
+      'France',
+      'Germany',
+      'India',
+      'Iran',
+      'Ireland',
+      'Mexico',
+      'Netherlands',
+      'New Zealand',
+      'Norway',
+      'Serbia',
+      'Spain',
+      'Switzerland',
+      'Turkey',
+      'Ukraine',
+      'United Kingdom',
+      'United States',
+    ];
+    expect(randomUserCountries.map(toCountry).filter((country) => !isCountry(country))).toEqual([]);
   });
 });

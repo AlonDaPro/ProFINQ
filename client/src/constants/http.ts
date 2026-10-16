@@ -1,7 +1,7 @@
 export enum HttpMethod {
   Get = 'GET',
   Post = 'POST',
-  Patch = 'PATCH',
+  Put = 'PUT',
   Delete = 'DELETE',
 }
 
@@ -10,6 +10,7 @@ export enum HttpStatus {
   BadRequest = 400,
   NotFound = 404,
   Conflict = 409,
+  TooManyRequests = 429,
 }
 
 export enum HttpHeader {
