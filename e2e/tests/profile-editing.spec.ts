@@ -1,6 +1,15 @@
 import type { Page } from '@playwright/test';
 import { PERSON_ID } from '../fixtures/randomUsers';
-import { expect, he, openProfile, openRandomList, profileRows, seedSavedProfiles, test } from '../fixtures/test';
+import {
+  EXPECTS_HTTP_ERRORS,
+  expect,
+  he,
+  openProfile,
+  openRandomList,
+  profileRows,
+  seedSavedProfiles,
+  test,
+} from '../fixtures/test';
 
 const titleBox = (page: Page) => page.getByRole('combobox', { name: he.title, exact: true });
 const countryBox = (page: Page) => page.getByRole('combobox', { name: he.country, exact: true });
@@ -123,15 +132,22 @@ test.describe('Screen 3: validation', () => {
     }
   });
 
-  test('pressing Enter in an invalid form submits nothing', async ({ page, request }) => {
+  test('pressing Enter in an invalid form sends nothing', async ({ page }) => {
     await openRandomList(page);
     await openProfile(page, 'John Smith');
+    const writes: string[] = [];
+    page.on('request', (sent) => {
+      if (sent.url().includes('/api/profiles') && sent.method() !== 'GET') writes.push(sent.method());
+    });
 
     await page.getByLabel(he.email).fill('not an email');
     await page.getByLabel(he.email).press('Enter');
+    // A positive sync point: the form has rendered its verdict, so any submit would have fired.
+    await expect(page.getByText(he.invalidEmail)).toBeVisible();
+    await page.getByLabel(he.city).press('Enter');
+    await expect(page.getByText(he.invalidFormOne)).toBeVisible();
 
-    await expect(page.getByText(he.savedFeedback)).toHaveCount(0);
-    expect((await request.get(`/api/profiles/${PERSON_ID.johnSmith}`)).status()).toBe(404);
+    expect(writes).toEqual([]);
   });
 
   test('accepts phone numbers in every common format', async ({ page }) => {
@@ -158,7 +174,7 @@ test.describe('Screen 3: validation', () => {
     await expect(page.getByText(he.savedFeedback)).toBeVisible();
   });
 
-  test('maps a server rejection onto the field it is about', async ({ page }) => {
+  test('maps a server rejection onto the field it is about', EXPECTS_HTTP_ERRORS, async ({ page }) => {
     await openRandomList(page);
     await openProfile(page, 'John Smith');
     await page.route('**/api/profiles', (route) =>
@@ -183,7 +199,7 @@ test.describe('Screen 3: validation', () => {
     await expect(page.getByLabel(he.email)).toHaveAttribute('aria-invalid', 'true');
   });
 
-  test('explains a rate limit (429) instead of a generic failure', async ({ page }) => {
+  test('explains a rate limit (429) instead of a generic failure', EXPECTS_HTTP_ERRORS, async ({ page }) => {
     await openRandomList(page);
     await openProfile(page, 'John Smith');
     await page.route('**/api/profiles', (route) =>

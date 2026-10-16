@@ -1,4 +1,14 @@
-import { expect, he, openProfile, openRandomList, profileRows, stubRandomUser, test } from '../fixtures/test';
+import {
+  EXPECTS_HTTP_ERRORS,
+  expect,
+  he,
+  openProfile,
+  openRandomList,
+  profileRows,
+  RANDOM_USER_API,
+  stubRandomUser,
+  test,
+} from '../fixtures/test';
 
 test.describe('Screen 1: random list', () => {
   test('shows thumbnail, full name, gender, country, phone and email for each of the 10 people', async ({ page }) => {
@@ -7,7 +17,7 @@ test.describe('Screen 1: random list', () => {
     const row = profileRows(page).filter({ hasText: 'Mr José García' });
     // Decorative (alt=""), so it has no img role: the name beside it already says who this is.
     await expect(row.locator('img')).toHaveAttribute('src', /portraits\/thumb\//);
-    for (const value of ['male', 'Spain', '928-519-794', 'jose.garcia@example.com']) {
+    for (const value of ['Male', 'Spain', '928-519-794', 'jose.garcia@example.com']) {
       await expect(row).toContainText(value);
     }
   });
@@ -56,24 +66,27 @@ test.describe('Screen 1: random list', () => {
     await expect(profileRows(page)).toHaveCount(1);
   });
 
-  test('shows an error with a working retry when randomuser.me fails', async ({ page }) => {
-    await page.unroute('https://randomuser.me/api/?**');
-    await page.route('https://randomuser.me/api/?**', (route) => route.fulfill({ status: 503, body: 'down' }));
+  test('shows an error with a working retry when randomuser.me fails', EXPECTS_HTTP_ERRORS, async ({ page }) => {
+    await page.unroute(RANDOM_USER_API);
+    await page.route(RANDOM_USER_API, (route) => route.fulfill({ status: 503, body: 'down' }));
     await page.goto('/random');
     await expect(page.getByRole('alert')).toContainText('Request failed with status 503');
 
-    await page.unroute('https://randomuser.me/api/?**');
+    await page.unroute(RANDOM_USER_API);
     await stubRandomUser(page);
     await page.getByRole('button', { name: 'Try again' }).click();
 
     await expect(profileRows(page)).toHaveCount(10);
   });
 
-  test('stacks each row into a readable card on a phone @mobile', async ({ page }) => {
+  test('stacks each row into a readable card on a phone @mobile', async ({ page, isMobile }) => {
+    test.skip(!isMobile, 'The stacked layout only exists on a phone');
     await openRandomList(page);
 
     const row = profileRows(page).first();
-    await expect(row.getByText('Email', { exact: true })).toBeVisible();
+    // Shown as a real label, not as screen-reader-only text (which is clipped to 1px).
+    const label = await row.getByText('Email', { exact: true }).boundingBox();
+    expect(label?.width).toBeGreaterThan(1);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow).toBeLessThanOrEqual(0);
   });

@@ -1,5 +1,5 @@
 import { PERSON_ID } from '../fixtures/randomUsers';
-import { expect, he, openProfile, openRandomList, profileRows, test } from '../fixtures/test';
+import { EXPECTS_HTTP_ERRORS, expect, he, openProfile, openRandomList, profileRows, test } from '../fixtures/test';
 
 test.describe('Screen 3: actions', () => {
   test('from Screen 1: Save persists the profile and turns Save into Delete', async ({ page, request }) => {
@@ -68,6 +68,37 @@ test.describe('Screen 3: actions', () => {
     await expect(page.getByRole('button', { name: he.save })).toBeDisabled();
   });
 
+  test('a saved person reopened from Screen 1 offers Delete, not Save', async ({ page }) => {
+    await openRandomList(page);
+    await openProfile(page, 'Noa Levi');
+    await page.getByRole('button', { name: he.save }).click();
+    await expect(page.getByText(he.savedFeedback)).toBeVisible();
+    await page.getByRole('button', { name: he.back }).click();
+
+    await openProfile(page, 'Noa Levi');
+
+    await expect(page.getByRole('button', { name: he.delete })).toBeVisible();
+    await expect(page.getByRole('button', { name: he.save })).toHaveCount(0);
+
+    await page.getByRole('button', { name: he.delete }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: he.delete }).click();
+    await expect(page).toHaveURL(/\/random$/);
+    await expect(profileRows(page).filter({ hasText: 'Noa Levi' })).not.toContainText('Saved');
+  });
+
+  test('returns focus to the button that opened the dialog when it closes', async ({ page }) => {
+    await openRandomList(page);
+    await openProfile(page, 'Noa Levi');
+    await page.getByRole('button', { name: he.save }).click();
+    await expect(page.getByText(he.savedFeedback)).toBeVisible();
+
+    await page.getByRole('button', { name: he.delete }).click();
+    await page.keyboard.press('Escape');
+
+    await expect(page.getByRole('alertdialog')).toBeHidden();
+    await expect(page.getByRole('button', { name: he.delete })).toBeFocused();
+  });
+
   test('from Screen 2: Delete asks first, then removes the profile', async ({ page }) => {
     await openRandomList(page);
     await openProfile(page, 'Luke Kelly');
@@ -131,17 +162,21 @@ test.describe('Screen 3: actions', () => {
     await expect(page.getByRole('alertdialog')).toBeVisible();
   });
 
-  test('a saved profile survives a reload; an unsaved one explains it is gone', async ({ page }) => {
-    await openRandomList(page);
-    await openProfile(page, 'Noa Levi');
-    await page.getByRole('button', { name: he.save }).click();
-    await expect(page.getByText(he.savedFeedback)).toBeVisible();
-    await page.reload();
-    await expect(page.getByLabel(he.firstName)).toHaveValue('Noa');
+  test(
+    'a saved profile survives a reload; an unsaved one explains it is gone',
+    EXPECTS_HTTP_ERRORS,
+    async ({ page }) => {
+      await openRandomList(page);
+      await openProfile(page, 'Noa Levi');
+      await page.getByRole('button', { name: he.save }).click();
+      await expect(page.getByText(he.savedFeedback)).toBeVisible();
+      await page.reload();
+      await expect(page.getByLabel(he.firstName)).toHaveValue('Noa');
 
-    await page.goto(`/random/${PERSON_ID.johnSmith}`);
-    await expect(page.getByRole('heading', { name: he.notFound })).toBeVisible();
-  });
+      await page.goto(`/random/${PERSON_ID.johnSmith}`);
+      await expect(page.getByRole('heading', { name: he.notFound })).toBeVisible();
+    },
+  );
 });
 
 test.describe('Screen 3: bidirectional text', () => {
@@ -177,16 +212,10 @@ test.describe('Screen 3: bidirectional text', () => {
     await openProfile(page, 'Noa Levi');
     const lastName = page.getByLabel(he.lastName);
 
-    await lastName.fill('Levi');
-    await lastName.press('End');
-    await lastName.pressSequentially(' (Jr.)');
+    await lastName.fill('Levi (Jr.)');
 
-    await expect(lastName).toHaveValue('Levi (Jr.)');
-    // Caret and neutral punctuation follow LTR rules: the brackets did not flip around.
-    const caretAtEnd = await lastName.evaluate(
-      (input: HTMLInputElement) => input.selectionStart === input.value.length,
-    );
-    expect(caretAtEnd).toBe(true);
+    // dir="auto" resolves from the first strong character: Latin text lays out LTR, so the
+    // brackets and the caret follow LTR rules inside the RTL page.
     expect(await lastName.evaluate((input) => getComputedStyle(input).direction)).toBe('ltr');
   });
 

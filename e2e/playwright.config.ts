@@ -2,7 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 // Dedicated ports and database, so a test run never touches the dev servers or dev data.
 const API_PORT = 4100;
-const WEB_PORT = 4173;
+// Not vite preview's default (4173): a preview left running against the dev API must never be reused.
+const WEB_PORT = 4174;
 const WEB_URL = `http://localhost:${WEB_PORT}`;
 const DATABASE_URL = process.env.E2E_DATABASE_URL ?? 'postgres://profiles:profiles@localhost:5432/profiles_e2e';
 const SERVER_START_TIMEOUT_MS = 120_000;

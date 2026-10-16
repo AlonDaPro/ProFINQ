@@ -1,7 +1,7 @@
 import { test as base, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { randomUserResponse } from './randomUsers';
 
-const RANDOM_USER_API = 'https://randomuser.me/api/?**';
+export const RANDOM_USER_API = 'https://randomuser.me/api/?**';
 const RANDOM_USER_PORTRAITS = 'https://randomuser.me/api/portraits/**';
 // 1×1 transparent PNG: portraits load instantly and offline.
 const PIXEL_PNG = Buffer.from(
@@ -58,7 +58,8 @@ async function deleteAllSavedProfiles(request: APIRequestContext): Promise<void>
     expect(response.ok()).toBe(true);
     const { profiles } = (await response.json()) as ProfilePage;
     if (profiles.length === 0) return;
-    await Promise.all(profiles.map((profile) => request.delete(`/api/profiles/${profile.id}`)));
+    const deletions = await Promise.all(profiles.map((profile) => request.delete(`/api/profiles/${profile.id}`)));
+    for (const deletion of deletions) expect(deletion.status()).toBe(204);
   }
 }
 
@@ -88,8 +89,11 @@ export async function stubRandomUser(page: Page): Promise<void> {
   await page.route(RANDOM_USER_API, (route) => route.fulfill({ json: randomUserResponse }));
 }
 
-// The browser logs every non-2xx response; tests that provoke one (404, 503) expect it.
-const EXPECTED_HTTP_ERROR_LOG = /^Failed to load resource: the server responded with a status of/;
+// The browser logs every non-2xx response. Only a test that provokes one (a 404, a stubbed 503)
+// opts in, with EXPECTS_HTTP_ERRORS; anywhere else an error response fails the test.
+const HTTP_ERROR_LOG = /^Failed to load resource: the server responded with a status of/;
+const EXPECTS_HTTP_ERRORS_TYPE = 'expects-http-errors';
+export const EXPECTS_HTTP_ERRORS = { annotation: { type: EXPECTS_HTTP_ERRORS_TYPE } };
 
 /**
  * Every test starts with an empty database and a deterministic randomuser.me,
@@ -97,13 +101,14 @@ const EXPECTED_HTTP_ERROR_LOG = /^Failed to load resource: the server responded 
  */
 export const test = base.extend<{ cleanState: void }>({
   cleanState: [
-    async ({ page, request }, use) => {
+    async ({ page, request }, use, testInfo) => {
+      const expectsHttpErrors = testInfo.annotations.some(({ type }) => type === EXPECTS_HTTP_ERRORS_TYPE);
       const pageErrors: string[] = [];
       page.on('pageerror', (error) => pageErrors.push(error.message));
       page.on('console', (message) => {
-        if (message.type() === 'error' && !EXPECTED_HTTP_ERROR_LOG.test(message.text())) {
-          pageErrors.push(message.text());
-        }
+        if (message.type() !== 'error') return;
+        if (expectsHttpErrors && HTTP_ERROR_LOG.test(message.text())) return;
+        pageErrors.push(message.text());
       });
 
       await deleteAllSavedProfiles(request);
